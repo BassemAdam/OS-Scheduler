@@ -1,7 +1,7 @@
 #include "headers.h"
 
 void clearResources(int);
-
+#define msgqKey 301
 struct process
 {
     int id;
@@ -9,10 +9,16 @@ struct process
     int running_time;
     int priority;
 };
+struct msgbuff
+{
+    long mtype;
+    struct process process;
+};
 struct process *processes;
-
+int msgq;
+pid_t clk_id, scheduler_id;
 // This function reads the processes from the file and stores them in the processes list
-int inputProcesses(struct process **processes)
+int input_processes(struct process **processes)
 {
     FILE *file = fopen("processes.txt", "r");
     if (file == NULL) // Check if the file exists
@@ -43,7 +49,7 @@ int inputProcesses(struct process **processes)
     return count;
 }
 
-void requestAlgorithm(int *chosen_algorithm, int *quantum_time)
+void request_algorithm(int *chosen_algorithm, int *quantum_time)
 {
     printf("Please enter the chosen scheduling algorithm and its parameters\n");
     printf("1-HPF  2-SRTN  3-RR\n"); // 1 for HPF, 2 for SRTN, 3 for RR
@@ -63,7 +69,7 @@ void requestAlgorithm(int *chosen_algorithm, int *quantum_time)
         scanf("%d", quantum_time);
     }
 }
-void createClkScheduler(char *algorthmNo, char *quantum, char *countProcesses)
+void create_clk_scheduler(char *algorthmNo, char *quantum, char *countProcesses)
 {
     int clk_pid = fork();
     if (clk_pid == -1)
@@ -90,27 +96,54 @@ void createClkScheduler(char *algorthmNo, char *quantum, char *countProcesses)
         }
     }
 }
+// This function sends the process to the scheduler
+void send_to_scheduler(int msqid, struct process process)
+{
+    struct msgbuff message;
+    message.mtype = 1;
+    message.process = process;
+    if (msgsnd(msqid, &message, sizeof(message.process), !IPC_NOWAIT) == -1)
+    {
+        perror("Error in send");
+        exit(-1);
+    }
+}
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
     // TODO Initialization
     // 1. Read the input files.
-    int count_processes = inputProcesses(&processes);
+    key_t key = ftok("keyFile", msgqKey);
+    msgq = msgget(key, IPC_CREAT | 0666);
+    int count_processes = input_processes(&processes);
+    printf("Processes count: %d\n", count_processes);
     // 2. Ask the user for the chosen scheduling algorithm and its parameters, if there are any.
     int chosen_algorithm, quantum_time;
-    requestAlgorithm(&chosen_algorithm, &quantum_time);
+    request_algorithm(&chosen_algorithm, &quantum_time);
     // 3. Initiate and create the scheduler and clock processes.
     char chosen_algorithm_str[10], quantum_time_str[10], count_processes_str[10];
 
     sprintf(chosen_algorithm_str, "%d", chosen_algorithm);
     sprintf(quantum_time_str, "%d", quantum_time);
     sprintf(count_processes_str, "%d", count_processes);
-    createClkScheduler(chosen_algorithm_str, quantum_time_str, count_processes_str);
+    create_clk_scheduler(chosen_algorithm_str, quantum_time_str, count_processes_str);
     initClk();
+    printf("Clock and Scheduler created\n");
     // 4. Use this function after creating the clock process to initialize clock
     // To get time use this
     // initClk();
     // TODO Generation Main Loop
+    int i = 0;
+    while (i < count_processes)
+    {
+        int current_time = getClk();
+        if (processes[i].arrival_time == current_time)
+        {
+            send_to_scheduler(msgq, processes[i]);
+            printf("Sending process %d to the scheduler\n", processes[i].id);
+            i++;
+        }
+    }
     // 5. Create a data structure for processes and provide it with its parameters.
     // 6. Send the information to the scheduler at the appropriate time.
     // 7. Clear clock resources
@@ -119,7 +152,11 @@ int main(int argc, char *argv[])
 
 void clearResources(int signum)
 {
-    // Clears all resources in case of interruption
+    // Clears all resources
+    kill(clk_id, SIGINT);
+    kill(scheduler_id, SIGINT);
     free(processes);
+    destroyClk(true);
+    msgctl(msgq, IPC_RMID, (struct msqid_ds *)0);
     exit(0);
 }
