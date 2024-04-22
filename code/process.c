@@ -12,12 +12,14 @@ void decrementTime(int signum)
 void terminate(int signum)
 {
     destroyClk(false);
+    kill(getppid(), SIGUSR2);
     exit(0);
 }
 
 
 int main(int agrc, char * argv[])
 {
+    printf("hello \n");
     signal(SIGUSR1, decrementTime);
     signal(SIGINT, terminate);
     initClk();
@@ -25,12 +27,11 @@ int main(int agrc, char * argv[])
     remainingtime = atoi(argv[1]);
     
     //TODO it needs to get the remaining time from somewhere
-    //remainingtime = ??;
     while (remainingtime > 0)
     {
         //still running
     }
-    
+    printf("Scheduler: process with id: %d has finished\n", getpid());
     raise (SIGINT);
 
     

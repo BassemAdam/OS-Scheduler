@@ -1,19 +1,6 @@
 #include "headers.h"
 
 void clearResources(int);
-#define msgqKey 301
-struct process
-{
-    int id;
-    int arrival_time;
-    int running_time;
-    int priority;
-};
-struct msgbuff
-{
-    long mtype;
-    struct process process;
-};
 struct process *processes;
 int msgq;
 pid_t clk_id, scheduler_id;
@@ -43,6 +30,7 @@ int input_processes(struct process **processes)
     for (int i = 0; i < count; i++)
     {
         fscanf(file, "%d %d %d %d", &(*processes)[i].id, &(*processes)[i].arrival_time, &(*processes)[i].running_time, &(*processes)[i].priority);
+        (*processes)[i].remainig_time = (*processes)[i].running_time;
         printf("%d %d %d %d\n", (*processes)[i].id, (*processes)[i].arrival_time, (*processes)[i].running_time, (*processes)[i].priority);
     }
     fclose(file);
@@ -147,7 +135,8 @@ int main(int argc, char *argv[])
     // 5. Create a data structure for processes and provide it with its parameters.
     // 6. Send the information to the scheduler at the appropriate time.
     // 7. Clear clock resources
-    destroyClk(true);
+    while(1);
+    destroyClk(false);
 }
 
 void clearResources(int signum)

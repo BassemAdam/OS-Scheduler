@@ -1,3 +1,5 @@
+#ifndef HEADERS_H
+#define HEADERS_H
 #include <stdio.h>      //if you don't use scanf/printf change this include
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -10,13 +12,30 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <limits.h>
+#include <errno.h>
 
 typedef short bool;
 #define true 1
 #define false 0
 
 #define SHKEY 300
-
+#define msgqKey 301
+struct process
+{
+    int id;
+    int arrival_time;
+    int running_time;
+    int priority;
+    int remainig_time;
+    pid_t pid ;
+    
+};
+struct msgbuff
+{
+    long mtype;
+    struct process process;
+};
 
 ///==============================
 //don't mess with this variable//
@@ -65,3 +84,10 @@ void destroyClk(bool terminateAll)
         killpg(getpgrp(), SIGINT);
     }
 }
+#endif
+
+
+
+
+
+
