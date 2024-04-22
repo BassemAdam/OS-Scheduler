@@ -88,7 +88,7 @@ struct process recieveProcess()
     {
             if (errno == ENOMSG)
             {
-                printf("no message Recieved \n");
+               // printf("no message Recieved \n");
                 
             }else
             {
@@ -170,12 +170,13 @@ int main(int argc, char * argv[])
                         if (pid == 0)
                         {
                             char str[10];
-                            sprintf(str, "%d", currentlyRunningProcess.remainig_time);
+                            sprintf(str, "%d", recievedProcess.remainig_time);
                             execl("./process.out", "process.out", str, NULL);
                             
                         }
                         else
                         {
+                            sleep(1);
                             recievedProcess.pid = pid;
                             kill(recievedProcess.pid, SIGSTOP);
                         }
@@ -199,6 +200,7 @@ int main(int argc, char * argv[])
                         printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
                         kill(currentlyRunningProcess.pid, SIGCONT);
                         kill(currentlyRunningProcess.pid, decrementTime);
+                        currentlyRunningProcess.remainig_time--;
                     }
                    
                 }
@@ -212,12 +214,14 @@ int main(int argc, char * argv[])
                         {
                             printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
                             kill(currentlyRunningProcess.pid, decrementTime);
+                            currentlyRunningProcess.remainig_time--;
                         }else
                         {
                             kill(currentlyRunningProcess.pid , SIGSTOP);
                             currentlyRunningProcess = temp;
                             kill(currentlyRunningProcess.pid, SIGCONT);
                             kill(currentlyRunningProcess.pid, decrementTime);
+                            currentlyRunningProcess.remainig_time--;
                         }
                     }
                 }

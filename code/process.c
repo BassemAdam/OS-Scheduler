@@ -19,13 +19,15 @@ void terminate(int signum)
 
 int main(int agrc, char * argv[])
 {
-    printf("hello \n");
+    printf( "%s\n", argv[1]);
+    remainingtime = atoi(argv[1]);
+    printf("Scheduler: process with id: %d is ready with remaining time  %d \n", getpid() , remainingtime);
+    
     signal(SIGUSR1, decrementTime);
     signal(SIGINT, terminate);
     initClk();
     //remaining time will be passed from the scheduler
-    remainingtime = atoi(argv[1]);
-    
+   
     //TODO it needs to get the remaining time from somewhere
     while (remainingtime > 0)
     {
