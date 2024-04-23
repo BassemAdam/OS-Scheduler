@@ -165,7 +165,7 @@ struct process recieveProcess()
     {
             if (errno == ENOMSG)
             {
-                printf("no message Recieved \n");
+                //printf("no message Recieved \n");
                 
             }else
             {
@@ -358,22 +358,31 @@ if (algorthmNo == 3)
                 while (recievedProcess.id  != -1)
                 {
                     recievedProcess = recieveProcess();
+                    
 
                     //if  recieved a process
                     if (recievedProcess.id != -1)
                     {
                        
+                       
                         //fork processes
                         pid_t pid = fork();
+
+                       
+                        
+                        
                         if (pid == 0)
                         {
+                            
                             char str[10];
-                            sprintf(str, "%d", currentlyRunningProcess.remainig_time);
+                            sprintf(str, "%d", recievedProcess.remainig_time);
                             execl("./process.out", "process.out", str, NULL);
                             
                         }
                         else
                         {
+                            sleep(1);
+
                             recievedProcess.pid = pid;
                             kill(recievedProcess.pid, SIGSTOP);
                         }
