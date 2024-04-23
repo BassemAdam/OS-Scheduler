@@ -1,5 +1,5 @@
 #include "headers.h"
-
+//hi babes
 void clearResources(int);
 struct process *processes;
 int msgq;
