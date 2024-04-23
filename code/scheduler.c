@@ -66,6 +66,61 @@ void ppush(pNode** head, struct process d, int p)
 
 int pisEmpty(pNode** head) { return (*head) == NULL; }
 
+    //------------------------------Normal Queue-----------------------------------
+        // Define the structure for a node in the normal queue
+        struct QueueNode {
+            struct process data;
+            struct QueueNode* next;
+        };
+
+        // Function to create a new node with given data for the normal queue
+        struct QueueNode* newQueueNode(struct process data) {
+            struct QueueNode* node = (struct QueueNode*)malloc(sizeof(struct QueueNode));
+            node->data = data;
+            node->next = NULL;
+            return node;
+        }
+
+        // Function to check if the normal queue is empty
+        int isQueueEmpty(struct QueueNode** front) {
+            return (*front) == NULL;
+        }
+
+        // Function to add a process to the end of the normal queue
+        void enqueueQueue(struct QueueNode** front, struct QueueNode** rear, struct process data) {
+            struct QueueNode* node = newQueueNode(data);
+
+            if (*rear == NULL) {
+                *front = *rear = node;
+                return;
+            }
+
+            (*rear)->next = node;
+            *rear = node;
+        }
+
+        // Function to remove a process from the front of the normal queue
+        struct process dequeueQueue(struct QueueNode** front, struct QueueNode** rear) {
+            if (isQueueEmpty(front)) {
+                struct process emptyProcess;
+                emptyProcess.id = -1;
+                return emptyProcess; // Return an empty process when the queue is empty
+            }
+
+            struct QueueNode* temp = *front;
+            struct process data = temp->data;
+
+            *front = (*front)->next;
+
+            if (*front == NULL)
+                *rear = NULL;
+
+            free(temp);
+
+            return data;
+        }
+    //----------------------------------------Normal Queue end--------------------------------
+
 //========================================================================================
 //SIGINT handler
 void terminateScheduler(int signum)
@@ -76,6 +131,28 @@ void terminateScheduler(int signum)
     kill(getppid(), SIGINT);
     printf("Scheduler Terminating\n");
     exit(0);
+}
+
+
+//for RR
+void alarmHandler(int signum) {
+    // This function will be called when the alarm signal is raised
+    // You can use it to stop the currently running process
+    if (currentlyRunningProcess.id != -1) {
+        kill(currentlyRunningProcess.pid, SIGSTOP);
+    }
+}
+
+void runProcessForQuantum(struct process p, int quantum) {
+    // Set the alarm handler
+    signal(SIGALRM, alarmHandler);
+
+    // Start the process
+    currentlyRunningProcess = p;
+    kill(currentlyRunningProcess.pid, SIGCONT);
+
+    // Set an alarm for the quantum
+    alarm(quantum);
 }
 //========================================================================================
 
@@ -88,7 +165,7 @@ struct process recieveProcess()
     {
             if (errno == ENOMSG)
             {
-               // printf("no message Recieved \n");
+                printf("no message Recieved \n");
                 
             }else
             {
@@ -150,6 +227,125 @@ int main(int argc, char * argv[])
         //every time the clock ticks
         if (currentTime != previousTime)
         {
+            //---------------------------------------------------------------Non-preemptive Highest Priority First HPF algorithm--------------------------------------------
+                if (algorthmNo == 1)
+                {
+                    struct process recievedProcess;
+                    recievedProcess.id = 1;
+
+                    while (recievedProcess.id  != -1)
+                    {
+                        recievedProcess = recieveProcess();
+
+                        //if did not recieve a process
+                        if (recievedProcess.id != -1)
+                        {
+                            //fork processes
+                            pid_t pid = fork();
+                            if (pid == 0)
+                            {
+                                char str[10];
+                                sprintf(str, "%d", recievedProcess.priority);
+                                execl("./process.out", "process.out", str, NULL);
+                                
+                            }
+                            else
+                            {
+                                recievedProcess.pid = pid;
+                                kill(recievedProcess.pid, SIGSTOP);
+                            }
+
+                            if(pq == NULL)
+                                pq = newNode(recievedProcess, recievedProcess.priority); 
+                            else
+                                ppush(&pq, recievedProcess, recievedProcess.priority);
+                        }
+
+                
+                    }
+                    
+
+                    //if no process is running
+                    if (currentlyRunningProcess.id == -1)
+                    {
+                        if (!pisEmpty(&pq))
+                        {
+                            currentlyRunningProcess = ppeek(&pq);
+                            printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
+                            kill(currentlyRunningProcess.pid, SIGCONT);
+                        }
+                    
+                    }
+                    //if process is running 
+                    else
+                    {
+                        if (!pisEmpty(&pq))
+                        {
+                            struct process temp = ppeek(&pq);
+                            if (temp.pid == currentlyRunningProcess.pid)
+                            {
+                                printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
+                            }else
+                            {
+                                kill(currentlyRunningProcess.pid , SIGSTOP);
+                                currentlyRunningProcess = temp;
+                                kill(currentlyRunningProcess.pid, SIGCONT);
+                            }
+                        }
+                    }
+                    
+                }
+            //---------------------------------------------------------------Non-preemptive Highest Priority First HPF algorithm END--------------------------------------------
+
+            
+//---------------------------------------------------------------Round robin algorithm------------------------------------------------------------------------------
+if (algorthmNo == 3)
+{
+    // Define the front and rear pointers for the queue
+    struct QueueNode* front = NULL;
+    struct QueueNode* rear = NULL;
+
+    struct process recievedProcess;
+    recievedProcess.id = 1;
+    int quantum = 10; // Set the time quantum
+
+    while (recievedProcess.id  != -1)
+    {
+        recievedProcess = recieveProcess();
+
+        if (recievedProcess.id != -1)
+        {
+            pid_t pid = fork();
+            if (pid == 0)
+            {
+                char str[10];
+                sprintf(str, "%d", recievedProcess.remainig_time);
+                execl("./process.out", "process.out", str, NULL);
+            }
+            else
+            {
+                recievedProcess.pid = pid;
+                kill(recievedProcess.pid, SIGSTOP);
+                enqueueQueue(&front, &rear, recievedProcess);
+            }
+        }
+
+        if (!isQueueEmpty(&front))
+        {
+            if (currentlyRunningProcess.id != -1 && currentlyRunningProcess.remainig_time > 0) {
+                enqueueQueue(&front, &rear, currentlyRunningProcess);
+            }
+            currentlyRunningProcess = dequeueQueue(&front, &rear);
+            if (currentlyRunningProcess.id != -1) {
+                printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
+                runProcessForQuantum(currentlyRunningProcess, quantum);
+            }
+        }
+    }
+}
+//---------------------------------------------------------------Round robin algorithm END -------------------------------------------------------------------------
+
+
 
             //---------------------------------------------------------------STRN algorithm----------------------------------------------------------------------------------
             if (algorthmNo == 2)
@@ -170,13 +366,12 @@ int main(int argc, char * argv[])
                         if (pid == 0)
                         {
                             char str[10];
-                            sprintf(str, "%d", recievedProcess.remainig_time);
+                            sprintf(str, "%d", currentlyRunningProcess.remainig_time);
                             execl("./process.out", "process.out", str, NULL);
                             
                         }
                         else
                         {
-                            sleep(1);
                             recievedProcess.pid = pid;
                             kill(recievedProcess.pid, SIGSTOP);
                         }
@@ -200,7 +395,6 @@ int main(int argc, char * argv[])
                         printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
                         kill(currentlyRunningProcess.pid, SIGCONT);
                         kill(currentlyRunningProcess.pid, decrementTime);
-                        currentlyRunningProcess.remainig_time--;
                     }
                    
                 }
@@ -214,14 +408,12 @@ int main(int argc, char * argv[])
                         {
                             printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
                             kill(currentlyRunningProcess.pid, decrementTime);
-                            currentlyRunningProcess.remainig_time--;
                         }else
                         {
                             kill(currentlyRunningProcess.pid , SIGSTOP);
                             currentlyRunningProcess = temp;
                             kill(currentlyRunningProcess.pid, SIGCONT);
                             kill(currentlyRunningProcess.pid, decrementTime);
-                            currentlyRunningProcess.remainig_time--;
                         }
                     }
                 }
