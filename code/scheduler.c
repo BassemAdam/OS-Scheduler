@@ -48,14 +48,14 @@ void ppush(pNode** head, struct process d, int p)
 
     pNode* temp = newNode(d, p);
 
-    if ((*head)->priority < p) {
+    if ((*head)->priority > p) {
 
         temp->next = *head;
         (*head) = temp;
     }
     else {
         while (start->next != NULL &&
-            start->next->priority > p) {
+            start->next->priority < p) {
             start = start->next;
         }
 
@@ -210,11 +210,13 @@ int main(int argc, char * argv[])
     int previousTime = getClk();
     currentlyRunningProcess.pid = -1;
     currentlyRunningProcess.id = -1;
+    bool recievedProcessthisTimeStep = false;
     
 
     key_t key = ftok("keyFile", msgqKey);
     msgq = msgget(key, IPC_CREAT | 0666);
-     printf(" %d \n" , countProcesses);
+  
+
      
     printf("Scheduler initialized with algorithm number: %d, quantum: %d, and count of processes: %d\n", algorthmNo, quantum, countProcesses);
 
@@ -357,7 +359,7 @@ if (algorthmNo == 3)
                 {
                     recievedProcess = recieveProcess();
 
-                    //if did not recieve a process
+                    //if  recieved a process
                     if (recievedProcess.id != -1)
                     {
                        
@@ -380,43 +382,101 @@ if (algorthmNo == 3)
                             pq = newNode(recievedProcess, recievedProcess.remainig_time); 
                         else
                             ppush(&pq, recievedProcess, recievedProcess.remainig_time);
+
+                        
+                        if (currentlyRunningProcess.id == -1) // no running process
+                        {   
+                            currentlyRunningProcess = ppeek(&pq);
+                            kill(currentlyRunningProcess.pid, SIGCONT);
+                            kill(currentlyRunningProcess.pid, decrementTime);
+                            ppop(&pq);
+                            currentlyRunningProcess.remainig_time--;
+                            if(pq == NULL)
+                            pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time); 
+                        else
+                            ppush(&pq, currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                            
+                        }else // running process and recieved a process 
+                        {
+                            struct process temp = ppeek(&pq);
+                            if(temp.id == currentlyRunningProcess.id) // still the highest priority
+                            {
+
+                                kill(currentlyRunningProcess.pid, decrementTime);
+                                
+                                 ppop(&pq);
+                            currentlyRunningProcess.remainig_time--;
+                            if(pq == NULL)
+                            pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time); 
+                        else
+                            ppush(&pq, currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                                
+                            }
+                            else // not the highest priority
+                            {
+                                kill(currentlyRunningProcess.pid, SIGSTOP);
+                                currentlyRunningProcess = ppeek(&pq);
+                                kill(currentlyRunningProcess.pid, SIGCONT);
+                                kill(currentlyRunningProcess.pid, decrementTime);
+                                
+                                 ppop(&pq);
+                            currentlyRunningProcess.remainig_time--;
+                            if(pq == NULL)
+                            pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time); 
+                        else
+                            ppush(&pq, currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                            }
+                        }
+
+                            recievedProcessthisTimeStep = true;
+                        
                     }
 
             
                 }
                 
-
-                //if no process is running
+                if(recievedProcessthisTimeStep) 
+                {
+                    recievedProcessthisTimeStep = false;
+                    previousTime = currentTime;
+                    continue;
+                }
+                //no recieved process and ther is no running process
                 if (currentlyRunningProcess.id == -1)
                 {
-                    if (!pisEmpty(&pq))
+                    if(!pisEmpty(&pq))
                     {
                         currentlyRunningProcess = ppeek(&pq);
-                        printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
                         kill(currentlyRunningProcess.pid, SIGCONT);
+                        
                         kill(currentlyRunningProcess.pid, decrementTime);
+
+                         ppop(&pq);
+                            currentlyRunningProcess.remainig_time--;
+                            if(pq == NULL)
+                            pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time); 
+                        else
+                            ppush(&pq, currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                       
+
                     }
                    
-                }
-                //if process is running 
-                else
+                }else // no recieved process but there is a running process
                 {
-                    if (!pisEmpty(&pq))
-                    {
-                        struct process temp = ppeek(&pq);
-                        if (temp.pid == currentlyRunningProcess.pid)
-                        {
-                            printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
-                            kill(currentlyRunningProcess.pid, decrementTime);
-                        }else
-                        {
-                            kill(currentlyRunningProcess.pid , SIGSTOP);
-                            currentlyRunningProcess = temp;
-                            kill(currentlyRunningProcess.pid, SIGCONT);
-                            kill(currentlyRunningProcess.pid, decrementTime);
-                        }
-                    }
+
+                    
+                    kill(currentlyRunningProcess.pid, decrementTime);
+                    
+                     ppop(&pq);
+                            currentlyRunningProcess.remainig_time--;
+                            if(pq == NULL)
+                            pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time); 
+                        else
+                            ppush(&pq, currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                    
+
                 }
+               
                 
             }
             
