@@ -199,6 +199,8 @@ void processTermination(int sig)
 
 }
 
+
+
 struct QueueNode * waitingQfront = NULL;
 struct QueueNode * waitingQrear = NULL;
 
@@ -256,6 +258,7 @@ int main(int argc, char * argv[])
                         
                 if (pid == 0)
                 {
+                    
                     char str[10];
                     sprintf(str, "%d", recievedProcess.remainig_time);
                     execl("./process.out", "process.out", str, NULL);
@@ -263,12 +266,13 @@ int main(int argc, char * argv[])
                 }
                 else
                 {
-                    sleep(1);
+
                     recievedProcess.pid = pid;
                     enqueueQueue(&waitingQfront, &waitingQrear, recievedProcess);
-                    printf("kms\n");
                 }
-                kill(recievedProcess.pid, SIGSTOP);
+
+
+                
             }
         }
 
@@ -407,6 +411,7 @@ int main(int argc, char * argv[])
 
                     recievedProcessthisTimeStep = true;
                     temp = dequeueQueue(&waitingQfront, &waitingQrear);
+                    kill(temp.pid, SIGSTOP);
                     if(pq == NULL)
                         pq = newNode(temp, temp.remainig_time); 
                     else
@@ -467,6 +472,7 @@ int main(int argc, char * argv[])
                 //if queue is empty and remainingprocesses = 0 
                 if (remainingProcesses == 0 && pisEmpty(&pq))
                 {
+                    printf("yo time is %d\n", getClk());
                     kill(getppid(), SIGINT);
                 }
                 
