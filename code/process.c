@@ -8,7 +8,7 @@ void decrementTime(int signum)
 {
     
     remainingtime--;
-    printf("Scheduler: process with id: %d is running and  has remaining time %d \n", getpid(), remainingtime);
+    printf("Scheduler: process with id: %d is running and  has remaining time %d at TIME: %d \n", getpid(), remainingtime ,getClk());
 }
 
 void terminate(int signum)
