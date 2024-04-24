@@ -51,6 +51,7 @@ void request_algorithm(int *chosen_algorithm, int *quantum_time)
         }
         break;
     }
+    *quantum_time=-1;
     if (*chosen_algorithm == 3)
     {
         printf("Please enter the quantum time:\n");
@@ -128,7 +129,7 @@ int main(int argc, char *argv[])
         if (processes[i].arrival_time == current_time)
         {
             send_to_scheduler(msgq, processes[i]);
-            printf("Sending process %d to the scheduler\n", processes[i].id);
+            printf("Sending process %d to the scheduler at time = %d\n", processes[i].id, getClk());
             i++;
         }
     }

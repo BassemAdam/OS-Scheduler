@@ -176,7 +176,7 @@ struct process recieveProcess()
     }
     if (message.process.id != -1)
     {
-        printf("Scheduler: received process with id: %d \n", message.process.id);
+        printf("Scheduler: received process with id: %d at time = %d \n", message.process.id,getClk());
         remainingProcesses--;
     }
     
