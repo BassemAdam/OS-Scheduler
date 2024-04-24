@@ -335,7 +335,7 @@ int main(int argc, char * argv[])
                     usleep(5 * 1000); // usleep takes sleep time in microseconds
                     recievedProcess.pid = pid;
                     enqueueQueue(&waitingQfront, &waitingQrear, recievedProcess);
-                    printf("kms\n");
+                    
                 }
                 kill(recievedProcess.pid, SIGSTOP);
             }
@@ -537,6 +537,7 @@ int main(int argc, char * argv[])
                 {
                     if(recievedProcessthisTimeStep)
                     {
+                        
                         if (currentlyRunningProcess.remainig_time > ppeek(&pq).remainig_time)
                         {
                             kill(currentlyRunningProcess.pid, SIGSTOP);
@@ -549,11 +550,21 @@ int main(int argc, char * argv[])
                                 pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time);
                             else
                                 ppush(&pq, currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                        }else
+                        {
+                            kill(currentlyRunningProcess.pid, decrementTime);
+                            ppop(&pq);
+                            currentlyRunningProcess.remainig_time--;
+                            if(pq == NULL)
+                                pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                            else
+                                ppush(&pq, currentlyRunningProcess, currentlyRunningProcess.remainig_time);
                         }
                     }
-                    else // recieved a process but currently running has lesser remaining time 
+                    else // no recieved process this time step
                     {
-                        kill(currentlyRunningProcess.pid, decrementTime);
+                            
+                            kill(currentlyRunningProcess.pid, decrementTime);
                             ppop(&pq);
                             currentlyRunningProcess.remainig_time--;
                             if(pq == NULL)
