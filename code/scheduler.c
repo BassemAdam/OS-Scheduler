@@ -29,6 +29,7 @@ int countProcesses;
 int remainingProcesses;
 struct process currentlyRunningProcess;
 pNode * pq  = NULL;
+pNode * ReadyQueueHPF  = NULL;
 int algorthmNo;
 
 struct process ppeek(pNode** head)
@@ -120,8 +121,61 @@ int pisEmpty(pNode** head) { return (*head) == NULL; }
 
             return data;
         }
+        // Function to print the normal queue
+ 
+    
     //----------------------------------------Normal Queue end--------------------------------
+//------------------------------------UTILITY FUNCTIONS for HPF------------------------------------
+    void deleteNode(struct pnode** head, int id) {
+        // Store head node
+        struct pnode* temp = *head, *prev;
 
+        // If head node itself holds the key to be deleted
+        if (temp != NULL && temp->data.id == id) {
+            *head = temp->next; // Changed head
+            free(temp); // free old head
+            return;
+        }
+
+        // Search for the key to be deleted, keep track of the
+        // previous node as we need to change 'prev->next'
+        while (temp != NULL && temp->data.id != id) {
+            prev = temp;
+            temp = temp->next;
+        }
+
+        // If key was not present in linked list
+        if (temp == NULL) return;
+
+        // Unlink the node from linked list
+        prev->next = temp->next;
+
+        free(temp); // Free memory
+    }
+
+    void printQueue(struct pnode* pq) {
+    struct pnode* temp = pq;
+    struct pnode* copy = NULL;
+    while(temp != NULL) {
+        if (copy == NULL)
+            copy = newNode(temp->data, temp->data.priority);
+        else
+            ppush(&copy, temp->data, temp->data.priority);
+        temp = temp->next;
+    }
+    printf("\n");
+    printf("Ready queue = ");
+    while(copy != NULL) {
+        printf("\033[0;32m"); // Set the text color to green
+        printf("P(id: %d, pid: %d, priority: %d, remaining_time: %d), ", copy->data.id, copy->data.pid, copy->data.priority, copy->data.remainig_time);
+        printf("\033[0m"); // Resets the text color to default
+        struct pnode* toFree = copy;
+        copy = copy->next;
+        free(toFree);
+    }
+    printf("\n");
+}
+//------------------------------------UTILITY FUNCTIONS for HPF end------------------------------------
 //========================================================================================
 //SIGINT handler
 void terminateScheduler(int signum)
@@ -185,16 +239,31 @@ struct process recieveProcess()
 }
 
 
-
+// Function to print the normal queue
+void printQueueNrml(struct QueueNode* front) {
+    struct QueueNode* temp = front;
+    while (temp != NULL) {
+        printf("Process ID: %d, Process Priority: %d\n", temp->data.id, temp->data.priority);
+        temp = temp->next;
+    }
+}
 void processTermination(int sig)
 {
-    
+    if (algorthmNo == 1)
+    {
+        deleteNode(&pq, currentlyRunningProcess.id);
+    }
     currentlyRunningProcess.id = -1;
     currentlyRunningProcess.pid = -1;
+    printf("\033[0;35m"); // Set the text color to purple
+    printf("XXXXXXXXXXXXXXXXXXXXXXX Scheduler: process with id: %d has finished\n", currentlyRunningProcess.id);
+    printf("XXXXXXXXXXXXXXXXXXXXXXX algorithmNO: %d\n", algorthmNo);
+    printf("\033[0m"); // Resets the text color to default
     if (algorthmNo == 2)
     {
         ppop(&pq);
     }
+    
     
 
 }
@@ -243,8 +312,7 @@ int main(int argc, char * argv[])
         while (recievedProcess.id  != -1)
         {
             recievedProcess = recieveProcess();
-                    
-
+                  
             //if  recieved a process
             if (recievedProcess.id != -1)
             {
@@ -263,7 +331,8 @@ int main(int argc, char * argv[])
                 }
                 else
                 {
-                    sleep(1);
+                    //sleep(1);
+                    usleep(5 * 1000); // usleep takes sleep time in microseconds
                     recievedProcess.pid = pid;
                     enqueueQueue(&waitingQfront, &waitingQrear, recievedProcess);
                     printf("kms\n");
@@ -277,122 +346,157 @@ int main(int argc, char * argv[])
         //every time the clock ticks
         if (currentTime != previousTime)
         {
-            //---------------------------------------------------------------Non-preemptive Highest Priority First HPF algorithm--------------------------------------------
-                if (algorthmNo == 1)
-                {
-                    struct process recievedProcess;
-                    recievedProcess.id = 1;
-
-                    while (recievedProcess.id  != -1)
-                    {
-                        recievedProcess = recieveProcess();
-
-                        //if did not recieve a process
-                        if (recievedProcess.id != -1)
-                        {
-                            //fork processes
-                            pid_t pid = fork();
-                            if (pid == 0)
-                            {
-                                char str[10];
-                                sprintf(str, "%d", recievedProcess.priority);
-                                execl("./process.out", "process.out", str, NULL);
-                                
-                            }
-                            else
-                            {
-                                recievedProcess.pid = pid;
-                                kill(recievedProcess.pid, SIGSTOP);
-                            }
-
-                            if(pq == NULL)
-                                pq = newNode(recievedProcess, recievedProcess.priority); 
-                            else
-                                ppush(&pq, recievedProcess, recievedProcess.priority);
-                        }
-
+            printf("==============================Scheduler: current time = %d==============================\n", currentTime);
+             //---------------------------------------------------------------Non-preemptive Highest Priority First HPF algorithm--------------------------------------------
+            if (algorthmNo == 1)
+            {
                 
-                    }
-                    
-
-                    //if no process is running
-                    if (currentlyRunningProcess.id == -1)
-                    {
-                        if (!pisEmpty(&pq))
-                        {
-                            currentlyRunningProcess = ppeek(&pq);
-                            printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
-                            kill(currentlyRunningProcess.pid, SIGCONT);
-                        }
-                    
-                    }
-                    //if process is running 
+                printf("Currently running process: %d\n", currentlyRunningProcess.id);
+               //take from queue to priority Q
+                struct process temp;
+                while (!isQueueEmpty(&waitingQfront))
+                {
+                       
+                    recievedProcessthisTimeStep = true;
+                    temp = dequeueQueue(&waitingQfront, &waitingQrear);
+                    if(pq == NULL)
+                        pq = newNode(temp, temp.remainig_time); 
                     else
-                    {
-                        if (!pisEmpty(&pq))
-                        {
-                            struct process temp = ppeek(&pq);
-                            if (temp.pid == currentlyRunningProcess.pid)
-                            {
-                                printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
-                            }else
-                            {
-                                kill(currentlyRunningProcess.pid , SIGSTOP);
-                                currentlyRunningProcess = temp;
-                                kill(currentlyRunningProcess.pid, SIGCONT);
-                            }
-                        }
-                    }
-                    
+                        ppush(&pq, temp, temp.remainig_time);
+                    //printf("waiting queue iam here"); printQueue(pq);
                 }
-            //---------------------------------------------------------------Non-preemptive Highest Priority First HPF algorithm END--------------------------------------------
+                printQueue(pq);
 
+             
+                //i want here to get the process that arrived first and then add it to ready queue
+                // if (pq != NULL)
+                // {
+                //    struct process temp = ppeek(&pq);
+                //     if (temp.arrival_time == currentTime)
+                //     {
+                //         printf("peeked process: %d\n", ppeek(&pq).id);
+                //         if (ReadyQueueHPF == NULL)
+                //         {
+                //             ReadyQueueHPF = newNode(temp, temp.priority);
+                //         }
+                //         else
+                //         {
+                //             ppush(&ReadyQueueHPF, temp, temp.priority);
+                //         }
+                //         ppop(&pq);
+                //     }
+                // }
+            
+                
+                //if no process is running
+                if (currentlyRunningProcess.id == -1)
+                {
+                    if (!pisEmpty(&pq))
+                    {
+                        currentlyRunningProcess = ppeek(&pq);
+
+                        printf("Currently running process: %d\n", currentlyRunningProcess.id);
+
+                        kill(currentlyRunningProcess.pid, SIGCONT);
+                        kill(currentlyRunningProcess.pid, decrementTime);
+                       // ppop(&pq);
+                        currentlyRunningProcess.remainig_time--;
+                        // if(pq == NULL)
+                        //     pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                        // else
+                        //     ppush(&pq, currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                    }
+                }
+                else // process is running 
+                {
+                    kill(currentlyRunningProcess.pid, SIGCONT);
+                    kill(currentlyRunningProcess.pid, decrementTime);
+                    // if(recievedProcessthisTimeStep)
+                    // {
+                          
+                    //     // if (currentlyRunningProcess.remainig_time > ppeek(&pq).remainig_time)
+                    //     // {
+                    //     //     kill(currentlyRunningProcess.pid, SIGSTOP);
+                    //     //     currentlyRunningProcess = ppeek(&pq);
+                    //     //     kill(currentlyRunningProcess.pid, SIGCONT);
+                    //     //     kill(currentlyRunningProcess.pid, decrementTime);
+                    //     //     ppop(&pq);
+                    //     //     currentlyRunningProcess.remainig_time--;
+                    //     //     if(pq == NULL)
+                    //     //         pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                    //     //     else
+                    //     //         ppush(&pq, currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                    //     // }
+                    // }
+                    // else // recieved a process but currently running has lesser remaining time 
+                    // {
+                    //     kill(currentlyRunningProcess.pid, decrementTime);
+                    //         ppop(&pq);
+                    //         currentlyRunningProcess.remainig_time--;
+                    //         if(pq == NULL)
+                    //             pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                    //         else
+                    //             ppush(&pq, currentlyRunningProcess, currentlyRunningProcess.remainig_time);
+                    // }
+                }
+                
+
+                recievedProcessthisTimeStep = false;
+                
+                //if queue is empty and remainingprocesses = 0 
+                if (remainingProcesses == 0 && pisEmpty(&pq) && pisEmpty(&pq))
+                {
+                    kill(getppid(), SIGINT);
+                }
+            }
+            //---------------------------------------------------------------Non-preemptive Highest Priority First HPF algorithm END--------------------------------------------
             
     //---------------------------------------------------------------Round robin algorithm------------------------------------------------------------------------------
-    if (algorthmNo == 3)
-    {
-    // Define the front and rear pointers for the queue
-    struct QueueNode* front = NULL;
-    struct QueueNode* rear = NULL;
-
-    struct process recievedProcess;
-    recievedProcess.id = 1;
-    int quantum = 10; // Set the time quantum
-
-    while (recievedProcess.id  != -1)
-    {
-        recievedProcess = recieveProcess();
-
-        if (recievedProcess.id != -1)
-        {
-            pid_t pid = fork();
-            if (pid == 0)
+        {   if (algorthmNo == 3)
             {
-                char str[10];
-                sprintf(str, "%d", recievedProcess.remainig_time);
-                execl("./process.out", "process.out", str, NULL);
-            }
-            else
-            {
-                recievedProcess.pid = pid;
-                kill(recievedProcess.pid, SIGSTOP);
-                enqueueQueue(&front, &rear, recievedProcess);
-            }
-        }
+            // Define the front and rear pointers for the queue
+            struct QueueNode* front = NULL;
+            struct QueueNode* rear = NULL;
 
-        if (!isQueueEmpty(&front))
-        {
-            if (currentlyRunningProcess.id != -1 && currentlyRunningProcess.remainig_time > 0) {
-                enqueueQueue(&front, &rear, currentlyRunningProcess);
+            struct process recievedProcess;
+            recievedProcess.id = 1;
+            int quantum = 10; // Set the time quantum
+
+            while (recievedProcess.id  != -1)
+            {
+                recievedProcess = recieveProcess();
+
+                if (recievedProcess.id != -1)
+                {
+                    pid_t pid = fork();
+                    if (pid == 0)
+                    {
+                        char str[10];
+                        sprintf(str, "%d", recievedProcess.remainig_time);
+                        execl("./process.out", "process.out", str, NULL);
+                    }
+                    else
+                    {
+                        recievedProcess.pid = pid;
+                        kill(recievedProcess.pid, SIGSTOP);
+                        enqueueQueue(&front, &rear, recievedProcess);
+                    }
+                }
+
+                if (!isQueueEmpty(&front))
+                {
+                    if (currentlyRunningProcess.id != -1 && currentlyRunningProcess.remainig_time > 0) {
+                        enqueueQueue(&front, &rear, currentlyRunningProcess);
+                    }
+                    currentlyRunningProcess = dequeueQueue(&front, &rear);
+                    if (currentlyRunningProcess.id != -1) {
+                        printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
+                        runProcessForQuantum(currentlyRunningProcess, quantum);
+                    }
+                }
             }
-            currentlyRunningProcess = dequeueQueue(&front, &rear);
-            if (currentlyRunningProcess.id != -1) {
-                printf("Scheduler: process with id: %d is running\n", currentlyRunningProcess.pid);
-                runProcessForQuantum(currentlyRunningProcess, quantum);
             }
-        }
-    }
-    }
+        } 
     //---------------------------------------------------------------Round robin algorithm END -------------------------------------------------------------------------
 
 
@@ -471,6 +575,14 @@ int main(int argc, char * argv[])
                 }
                 
             }
+
+
+
+
+
+
+
+
 
 
 
