@@ -679,8 +679,6 @@ int main(int argc, char *argv[])
             //---------------------------------------------------------------Round robin algorithm------------------------------------------------------------------------------
             if (algorthmNo == 3)
             {
-
-                // take from queue to circuilar queue
                 struct process temp;
                 while (!isQueueEmpty(&waitingQfront))
                 {
@@ -690,65 +688,54 @@ int main(int argc, char *argv[])
                     enqueueC(&readyQueueC, temp);
                 }
                 printCQueue(readyQueueC);
-
-                // if no process is running
                 if (currentlyRunningProcess.id == -1)
                 {
                     if (!isQueueCEmpty(&readyQueueC))
                     {
                         currentlyRunningProcess = dequeueC(&readyQueueC);
-
-                        // printf("Currently running process: %d with remaining time %d\n", currentlyRunningProcess.id, currentlyRunningProcess.remainig_time);
+                        quantumCounter = 0;
                         kill(currentlyRunningProcess.pid, SIGCONT);
                         kill(currentlyRunningProcess.pid, decrementTime);
                         currentlyRunningProcess.remainig_time--;
-                        printf("remaining time: %d\n", currentlyRunningProcess.remainig_time);
-
                         quantumCounter++;
                     }
                 }
-                else // running process
+                else
                 {
-
                     if (currentlyRunningProcess.remainig_time == 0)
                     {
                         kill(currentlyRunningProcess.pid, SIGSTOP);
                         currentlyRunningProcess.id = -1;
                         currentlyRunningProcess.pid = -1;
-
                         if (!isQueueCEmpty(&readyQueueC))
                         {
                             currentlyRunningProcess = dequeueC(&readyQueueC);
-                            kill(currentlyRunningProcess.pid, SIGCONT);
-                            kill(currentlyRunningProcess.pid, decrementTime);
-                            quantumCounter = 1;
-                            currentlyRunningProcess.remainig_time--;
+                            quantumCounter = 0;
+                           
                         }
                     }
-                    if (quantumCounter == quantum)
-                    {
-                        kill(currentlyRunningProcess.pid, SIGSTOP);
-
-                        if (currentlyRunningProcess.remainig_time > 0)
-                            enqueueC(&readyQueueC, currentlyRunningProcess);
-                        if (!isQueueCEmpty(&readyQueueC))
-                        {
-                            currentlyRunningProcess = dequeueC(&readyQueueC);
-                            kill(currentlyRunningProcess.pid, SIGCONT);
-                            kill(currentlyRunningProcess.pid, decrementTime);
-                            quantumCounter = 1;
-                            currentlyRunningProcess.remainig_time--;
-                        }
-                    }
-                    else
+                    if (quantumCounter < quantum)
                     {
                         kill(currentlyRunningProcess.pid, SIGCONT);
                         kill(currentlyRunningProcess.pid, decrementTime);
                         currentlyRunningProcess.remainig_time--;
                         quantumCounter++;
                     }
+                    else if (quantumCounter == quantum)
+                    {
+                        kill(currentlyRunningProcess.pid, SIGSTOP);
+                        if (currentlyRunningProcess.remainig_time > 0)
+                            enqueueC(&readyQueueC, currentlyRunningProcess);
+                        currentlyRunningProcess.id = -1;
+                        currentlyRunningProcess.pid = -1;
+                        quantumCounter = 0;
+                        currentlyRunningProcess = dequeueC(&readyQueueC);
+                        kill(currentlyRunningProcess.pid, SIGCONT);
+                        kill(currentlyRunningProcess.pid, decrementTime);
+                        currentlyRunningProcess.remainig_time--;
+                        quantumCounter++;
+                    }
                 }
-
                 recievedProcessthisTimeStep = false;
 
                 // if queue is empty and remainingprocesses = 0
