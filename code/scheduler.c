@@ -171,6 +171,32 @@ struct process peekC(struct QueueC **q)
 {
     return (*q)->front->data;
 }
+
+void deleteCNode (struct QueueC **q, int id)
+{
+    struct pnode *temp = (*q)->front;
+    struct pnode *prev = NULL;
+    while (temp->data.id != id)
+    {
+        prev = temp;
+        temp = temp->next;
+    }
+    if (temp == (*q)->front)
+    {
+        (*q)->front = temp->next;
+        (*q)->rear->next = (*q)->front;
+    }
+    else if (temp == (*q)->rear)
+    {
+        prev->next = (*q)->front;
+        (*q)->rear = prev;
+    }
+    else
+    {
+        prev->next = temp->next;
+    }
+    free(temp);
+}
 //========================================================================================
 
 //------------------------------Normal Queue-----------------------------------
@@ -367,6 +393,8 @@ void printQueueNrml(struct QueueNode *front)
         temp = temp->next;
     }
 }
+int quantumCounter = 0;
+struct QueueC *readyQueueC = NULL;
 void processTermination(int sig)
 {
     if (algorthmNo == 1)
@@ -383,6 +411,12 @@ void processTermination(int sig)
     {
         ppop(&pq);
     }
+    // if (algorthmNo == 3)
+    // {
+    //     quantumCounter = 0;
+    //     deleteCNode(&readyQueueC, currentlyRunningProcess.id);
+
+    // }
 }
 
 struct QueueNode *waitingQfront = NULL;
@@ -402,13 +436,14 @@ int main(int argc, char *argv[])
     currentlyRunningProcess.pid = -1;
     currentlyRunningProcess.id = -1;
     bool recievedProcessthisTimeStep = false;
-    struct QueueC *readyQueueC = createQueueC();
+    readyQueueC = createQueueC();
+    
 
     key_t key = ftok("keyFile", msgqKey);
     msgq = msgget(key, IPC_CREAT | 0666);
 
     printf("Scheduler initialized with algorithm number: %d, quantum: %d, and count of processes: %d\n", algorthmNo, quantum, countProcesses);
-    int quantumCounter = 0;
+    
     // main while loop
     while (1)
     {
@@ -644,8 +679,8 @@ int main(int argc, char *argv[])
                 {
                     recievedProcessthisTimeStep = true;
                     temp = dequeueQueue(&waitingQfront, &waitingQrear);
+                    printf("Process id: %d, Process pid: %d, Process priority: %d, Process remaining time: %d\n", temp.id, temp.pid, temp.priority, temp.remainig_time);
                     enqueueC(&readyQueueC, temp);
-                    
                 }
                 printCQueue(readyQueueC);
 
@@ -654,39 +689,39 @@ int main(int argc, char *argv[])
                 {
                     if (!isQueueCEmpty(&readyQueueC))
                     {
-                        currentlyRunningProcess = peekC(&readyQueueC);
-                        
-                       // printf("Currently running process: %d with remaining time %d\n", currentlyRunningProcess.id, currentlyRunningProcess.remainig_time);
+                        currentlyRunningProcess = dequeueC(&readyQueueC);
+
+                        // printf("Currently running process: %d with remaining time %d\n", currentlyRunningProcess.id, currentlyRunningProcess.remainig_time);
                         kill(currentlyRunningProcess.pid, SIGCONT);
                         kill(currentlyRunningProcess.pid, decrementTime);
                         currentlyRunningProcess.remainig_time--;
+                        printf("remaining time: %d\n", currentlyRunningProcess.remainig_time);
 
                         quantumCounter++;
                     }
                 }
-                else // process is running
+                else //running process
                 {
-                    
-                        if (quantumCounter == quantum)
-                        {
-                            kill(currentlyRunningProcess.pid, SIGSTOP);
-                            currentlyRunningProcess = dequeueC(&readyQueueC);
+                    if(quantumCounter == quantum)
+                    {
+                        kill(currentlyRunningProcess.pid, SIGSTOP);
+                        enqueueC(&readyQueueC, currentlyRunningProcess);
+                        currentlyRunningProcess = dequeueC(&readyQueueC);
+                        kill(currentlyRunningProcess.pid, SIGCONT);
+                        kill(currentlyRunningProcess.pid, decrementTime);
+                        quantumCounter = 1;
+                        currentlyRunningProcess.remainig_time--;
 
-                            if (currentlyRunningProcess.remainig_time > 0)
-                                enqueueC(&readyQueueC, currentlyRunningProcess);
-                            printf("Currently running process: %d with remaining time %d\n", currentlyRunningProcess.id, currentlyRunningProcess.remainig_time);
-                            kill(currentlyRunningProcess.pid, SIGCONT);
-                            kill(currentlyRunningProcess.pid, decrementTime);
-                            quantumCounter = 0;
-                        }
-                        else
-                        {
-                            kill(currentlyRunningProcess.pid, decrementTime);
-                            currentlyRunningProcess.remainig_time--;
-                            quantumCounter++;
-                        }
-                  
+                    }else
+                    {
+                        kill(currentlyRunningProcess.pid, SIGCONT);
+                        kill(currentlyRunningProcess.pid, decrementTime);
+                        currentlyRunningProcess.remainig_time--;
+                        quantumCounter++;
+                    }
                 }
+
+                
                 recievedProcessthisTimeStep = false;
 
                 // if queue is empty and remainingprocesses = 0
