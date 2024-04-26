@@ -154,16 +154,23 @@ struct process dequeueC(struct QueueC **q)
 // Function to print the circular queue
 void printCQueue(struct QueueC *q)
 {
-    struct pnode *temp = q->front;
-    printf("\n");
-    printf("Ready queue = ");
-    while (temp != q->rear)
+    if (isQueueCEmpty(&q))
     {
-        printf("\033[0;32m"); // Set the text color to green
-        printf("P(id: %d, pid: %d, priority: %d, remaining_time: %d), ", temp->data.id, temp->data.pid, temp->data.priority, temp->data.remainig_time);
-        printf("\033[0m"); // Resets the text color to default
-        temp = temp->next;
+        printf("Queue is empty.\n");
+        return;
     }
+
+    struct pnode *temp = q->front;
+    printf("Circular Queue: ");
+    do
+    {
+        // change the color of the text to green
+        printf("\033[0;32m");
+        printf("P(id: %d, pid: %d, priority: %d, remaining_time: %d) ", temp->data.id, temp->data.pid, temp->data.priority, temp->data.remainig_time);
+        temp = temp->next;
+    } while (temp != q->front);
+
+    printf("\033[0m"); // reset the text color to default
     printf("\n");
 }
 
@@ -172,7 +179,7 @@ struct process peekC(struct QueueC **q)
     return (*q)->front->data;
 }
 
-void deleteCNode (struct QueueC **q, int id)
+void deleteCNode(struct QueueC **q, int id)
 {
     struct pnode *temp = (*q)->front;
     struct pnode *prev = NULL;
@@ -437,13 +444,12 @@ int main(int argc, char *argv[])
     currentlyRunningProcess.id = -1;
     bool recievedProcessthisTimeStep = false;
     readyQueueC = createQueueC();
-    
 
     key_t key = ftok("keyFile", msgqKey);
     msgq = msgget(key, IPC_CREAT | 0666);
 
     printf("Scheduler initialized with algorithm number: %d, quantum: %d, and count of processes: %d\n", algorthmNo, quantum, countProcesses);
-    
+
     // main while loop
     while (1)
     {
@@ -601,6 +607,7 @@ int main(int argc, char *argv[])
                     else
                         ppush(&pq, temp, temp.remainig_time);
                 }
+                printQueue(pq);
 
                 // if no process is running
                 if (currentlyRunningProcess.id == -1)
@@ -679,7 +686,7 @@ int main(int argc, char *argv[])
                 {
                     recievedProcessthisTimeStep = true;
                     temp = dequeueQueue(&waitingQfront, &waitingQrear);
-                    printf("Process id: %d, Process pid: %d, Process priority: %d, Process remaining time: %d\n", temp.id, temp.pid, temp.priority, temp.remainig_time);
+                    // printf("Process id: %d, Process pid: %d, Process priority: %d, Process remaining time: %d\n", temp.id, temp.pid, temp.priority, temp.remainig_time);
                     enqueueC(&readyQueueC, temp);
                 }
                 printCQueue(readyQueueC);
@@ -700,19 +707,40 @@ int main(int argc, char *argv[])
                         quantumCounter++;
                     }
                 }
-                else //running process
+                else // running process
                 {
-                    if(quantumCounter == quantum)
+
+                    if (currentlyRunningProcess.remainig_time == 0)
                     {
                         kill(currentlyRunningProcess.pid, SIGSTOP);
-                        enqueueC(&readyQueueC, currentlyRunningProcess);
-                        currentlyRunningProcess = dequeueC(&readyQueueC);
-                        kill(currentlyRunningProcess.pid, SIGCONT);
-                        kill(currentlyRunningProcess.pid, decrementTime);
-                        quantumCounter = 1;
-                        currentlyRunningProcess.remainig_time--;
+                        currentlyRunningProcess.id = -1;
+                        currentlyRunningProcess.pid = -1;
 
-                    }else
+                        if (!isQueueCEmpty(&readyQueueC))
+                        {
+                            currentlyRunningProcess = dequeueC(&readyQueueC);
+                            kill(currentlyRunningProcess.pid, SIGCONT);
+                            kill(currentlyRunningProcess.pid, decrementTime);
+                            quantumCounter = 1;
+                            currentlyRunningProcess.remainig_time--;
+                        }
+                    }
+                    if (quantumCounter == quantum)
+                    {
+                        kill(currentlyRunningProcess.pid, SIGSTOP);
+
+                        if (currentlyRunningProcess.remainig_time > 0)
+                            enqueueC(&readyQueueC, currentlyRunningProcess);
+                        if (!isQueueCEmpty(&readyQueueC))
+                        {
+                            currentlyRunningProcess = dequeueC(&readyQueueC);
+                            kill(currentlyRunningProcess.pid, SIGCONT);
+                            kill(currentlyRunningProcess.pid, decrementTime);
+                            quantumCounter = 1;
+                            currentlyRunningProcess.remainig_time--;
+                        }
+                    }
+                    else
                     {
                         kill(currentlyRunningProcess.pid, SIGCONT);
                         kill(currentlyRunningProcess.pid, decrementTime);
@@ -721,11 +749,10 @@ int main(int argc, char *argv[])
                     }
                 }
 
-                
                 recievedProcessthisTimeStep = false;
 
                 // if queue is empty and remainingprocesses = 0
-                if (remainingProcesses == 0 && isQueueCEmpty(&readyQueueC))
+                if (remainingProcesses == 0 && isQueueCEmpty(&readyQueueC) && currentlyRunningProcess.id == -1)
                 {
                     kill(getppid(), SIGINT);
                 }
