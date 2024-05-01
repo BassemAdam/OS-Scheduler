@@ -35,7 +35,10 @@ int main(int agrc, char * argv[])
     {
         //still running
     }
+    //change color to purple
+    printf("\033[0;35m");
     printf("Scheduler: process with id: %d has finished\n", getpid());
+    printf("\033[0m");
     raise (SIGINT);
 
     
