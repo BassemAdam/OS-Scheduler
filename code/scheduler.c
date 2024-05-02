@@ -2,6 +2,22 @@
 
 #define decrementTime SIGUSR1
 
+float *WTAArray;
+
+
+float calculateSD(float data[],int processCount) {
+    float sum = 0.0, mean, SD = 0.0;
+    int i;
+    for (i = 0; i < processCount; ++i) {
+        sum += data[i];
+    }
+    mean = sum / processCount;
+    for (i = 0; i < processCount; ++i) {
+        SD += pow(data[i] - mean, 2);
+    }
+    return sqrt(SD/processCount);
+}
+
 // Data Structures
 
 //========================================================================================
@@ -175,12 +191,11 @@ void printCQueue(struct QueueC *q)
     printf("\n");
 }
 
-struct process peekC(struct QueueC **q, struct pnode *currentNode)
+struct process peekC(struct QueueC **q)
 {
-    struct process data = currentNode->data;
-    currentNode = currentNode->next;
-    return data;
+    return (*q)->front->data;
 }
+
 
 void deleteCNode(struct QueueC **q, int id)
 {
@@ -337,6 +352,8 @@ void terminateScheduler(int signum)
 {
     destroyClk(false);
     msgctl(msgq, IPC_RMID, NULL);
+    // free(WTAArray);
+    // free(currentlyRunningProcess.state);
     // signal to the process_genearator that the scheduler is done
     kill(getppid(), SIGINT);
     printf("Scheduler Terminating\n");
@@ -397,27 +414,31 @@ FILE *logFile;
 FILE *perf;
 
 float avgTA = 0;
-float avgWTA = 0;
+float sumWTA = 0;
 float CPUUtilization = 0;
 float stdWTA = 0;
 float avgWaiting = 0;
 
+
+
 void processTermination(int sig)
 {
 
-    fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d TA %d WTA %.2f\n", getClk(), currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time, getClk() - currentlyRunningProcess.arrival_time, (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time);
+    fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d TA %d sumWTA %.2f\n", getClk(), currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time, getClk() - currentlyRunningProcess.arrival_time, (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time);
     if (algorthmNo == 1)
     {
         deleteNode(&pq, currentlyRunningProcess.id);
     }
     avgTA += getClk() - currentlyRunningProcess.arrival_time;
-    avgWTA += (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time;
+    sumWTA += (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time;
     CPUUtilization += (float)currentlyRunningProcess.running_time;
-    stdWTA += pow((float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time - avgWTA, 2);
+    //stdWTA += pow((float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time - sumWTA, 2);
+    WTAArray[currentlyRunningProcess.id-1] = (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time;
     avgWaiting += getClk() - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time;
 
     currentlyRunningProcess.id = -1;
     currentlyRunningProcess.pid = -1;
+    currentlyRunningProcess.state = "finished";
     // currentlyRunningProcess.start_time = -1;
 
     printf("\033[0m"); // Resets the text color to default
@@ -433,6 +454,7 @@ struct pnode *currentCircularNode = NULL;
 
 int main(int argc, char *argv[])
 {
+
     signal(SIGINT, terminateScheduler);
     signal(SIGUSR2, processTermination);
     initClk();
@@ -443,11 +465,13 @@ int main(int argc, char *argv[])
     algorthmNo = atoi(argv[1]);
     int quantum = atoi(argv[2]);
     countProcesses = atoi(argv[3]);
+    WTAArray = malloc(countProcesses * sizeof(float));
     remainingProcesses = countProcesses;
     int previousTime = getClk();
     currentlyRunningProcess.pid = -1;
     currentlyRunningProcess.id = -1;
     currentlyRunningProcess.start_time = -1;
+    currentlyRunningProcess.state = malloc(10 * sizeof(char));
     bool recievedProcessthisTimeStep = false;
     readyQueueC = createQueueC();
 
@@ -489,6 +513,7 @@ int main(int argc, char *argv[])
                     recievedProcess.pid = pid;
                     recievedProcess.running_time = 0;
                     recievedProcess.start_time = -1;
+                    recievedProcess.state = "waiting";
                     recievedProcess.arrival_time = getClk();
 
                     enqueueQueue(&waitingQfront, &waitingQrear, recievedProcess);
@@ -530,7 +555,7 @@ int main(int argc, char *argv[])
                     {
 
                         currentlyRunningProcess = ppeek(&pq);
-
+                        currentlyRunningProcess.state = "running";
                         printf("Currently running process: %d\n", currentlyRunningProcess.id);
 
                         if (currentlyRunningProcess.start_time == -1)
@@ -552,6 +577,7 @@ int main(int argc, char *argv[])
                 }
                 else // process is running
                 {
+                    currentlyRunningProcess.state = "running";
                     kill(currentlyRunningProcess.pid, SIGCONT);
                     kill(currentlyRunningProcess.pid, decrementTime);
                     currentlyRunningProcess.remainig_time--;
@@ -563,11 +589,13 @@ int main(int argc, char *argv[])
                 // if queue is empty and remainingprocesses = 0
                 if (remainingProcesses == 0 && pisEmpty(&pq) && pisEmpty(&pq))
                 {
-                    kill(getppid(), SIGINT);
+                    
                     fprintf(perf, "CPU utilization = %.2f %%\n", CPUUtilization / (getClk() - 1) * 100);
-                    fprintf(perf, "Avg WTA = %.2f\n", avgWTA / countProcesses);
+                    fprintf(perf, "Avg sumWTA = %.2f\n", sumWTA / countProcesses);
                     fprintf(perf, "Avg Waiting = %.2f\n", avgWaiting / countProcesses);
-                    fprintf(perf, "Std WTA = %.2f\n", sqrt(stdWTA / countProcesses));
+                    fprintf(perf, "Std WTA = %.2f\n", calculateSD(WTAArray,countProcesses));
+                    kill(getppid(), SIGINT);
+                    // fprintf(perf, "Std sumWTA = %.2f\n", sqrt(stdWTA / countProcesses));
                 }
             }
             //---------------------------------------------------------------Non-preemptive Highest Priority First HPF algorithm END--------------------------------------------
@@ -609,6 +637,7 @@ int main(int argc, char *argv[])
                         kill(currentlyRunningProcess.pid, decrementTime);
                         ppop(&pq);
                         currentlyRunningProcess.remainig_time--;
+                        currentlyRunningProcess.running_time++;
                         if (pq == NULL)
                             pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time);
                         else
@@ -622,12 +651,23 @@ int main(int argc, char *argv[])
 
                         if (currentlyRunningProcess.remainig_time > ppeek(&pq).remainig_time)
                         {
+                            fprintf(logFile, "At time %d process %d stopped arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
                             kill(currentlyRunningProcess.pid, SIGSTOP);
                             currentlyRunningProcess = ppeek(&pq);
+                            if (currentlyRunningProcess.start_time == -1)
+                            {
+                                currentlyRunningProcess.start_time = getClk() - 1;
+                                fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+                            }
+                            else
+                            {
+                                fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+                            }
                             kill(currentlyRunningProcess.pid, SIGCONT);
                             kill(currentlyRunningProcess.pid, decrementTime);
                             ppop(&pq);
                             currentlyRunningProcess.remainig_time--;
+                            currentlyRunningProcess.running_time++;
                             if (pq == NULL)
                                 pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time);
                             else
@@ -638,6 +678,7 @@ int main(int argc, char *argv[])
                             kill(currentlyRunningProcess.pid, decrementTime);
                             ppop(&pq);
                             currentlyRunningProcess.remainig_time--;
+                            currentlyRunningProcess.running_time++;
                             if (pq == NULL)
                                 pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time);
                             else
@@ -650,6 +691,7 @@ int main(int argc, char *argv[])
                         kill(currentlyRunningProcess.pid, decrementTime);
                         ppop(&pq);
                         currentlyRunningProcess.remainig_time--;
+                        currentlyRunningProcess.running_time++;
                         if (pq == NULL)
                             pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time);
                         else
@@ -662,7 +704,13 @@ int main(int argc, char *argv[])
                 // if queue is empty and remainingprocesses = 0
                 if (remainingProcesses == 0 && pisEmpty(&pq))
                 {
+
+                    fprintf(perf, "CPU utilization = %.2f %%\n", CPUUtilization / (getClk() - 1) * 100);
+                    fprintf(perf, "Avg sumWTA = %.2f\n", sumWTA / countProcesses);
+                    fprintf(perf, "Avg Waiting = %.2f\n", avgWaiting / countProcesses);
+                    fprintf(perf, "Std sumWTA = %.2f\n", calculateSD(WTAArray,countProcesses));
                     kill(getppid(), SIGINT);
+                    
                 }
             }
 
@@ -749,11 +797,14 @@ int main(int argc, char *argv[])
                 // if queue is empty and remainingprocesses = 0
                 if (remainingProcesses == 0 && isQueueCEmpty(&readyQueueC) && currentlyRunningProcess.id == -1)
                 {
-                    kill(getppid(), SIGINT);
+
                     fprintf(perf, "CPU utilization = %.2f %%\n", CPUUtilization / (getClk() - 1) * 100);
-                    fprintf(perf, "Avg WTA = %.2f\n", avgWTA / countProcesses);
+                    fprintf(perf, "Avg sumWTA = %.2f\n", sumWTA / countProcesses);
                     fprintf(perf, "Avg Waiting = %.2f\n", avgWaiting / countProcesses);
-                    //fprintf(perf, "Std WTA = %.2f\n", sqrt(stdWTA / countProcesses));
+                    fprintf(perf, "Std sumWTA = %.2f\n", calculateSD(WTAArray,countProcesses));
+                    kill(getppid(), SIGINT);
+                    // float sigma = sqrt(stdWTA / countProcesses);
+                    // fprintf(perf, "Std sumWTA = %.2f\n", sigma);
                 }
             }
 
