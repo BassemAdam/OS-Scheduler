@@ -125,7 +125,7 @@ void runProcess()
 
 void HPF();
 void SRTN();
-void RR();
+void RR(int quantum);
 
 int main(int argc, char *argv[])
 {
