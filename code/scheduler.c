@@ -1,4 +1,5 @@
 #include "headers.h"
+
 #define decrementTime SIGUSR1
 
 // Data Structures
@@ -392,19 +393,32 @@ void printQueueNrml(struct QueueNode *front)
 int quantumCounter = 0;
 struct QueueC *readyQueueC = NULL;
 
-int terminationFlag = 0;
+FILE *logFile;
+FILE *perf;
+
+float avgTA = 0;
+float avgWTA = 0;
+float CPUUtilization = 0;
+float stdWTA = 0;
+float avgWaiting = 0;
 
 void processTermination(int sig)
 {
-    terminationFlag = currentlyRunningProcess;
-    
-    //fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+
+    fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d TA %d WTA %.2f\n", getClk(), currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time, getClk() - currentlyRunningProcess.arrival_time, (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time);
     if (algorthmNo == 1)
     {
         deleteNode(&pq, currentlyRunningProcess.id);
     }
+    avgTA += getClk() - currentlyRunningProcess.arrival_time;
+    avgWTA += (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time;
+    CPUUtilization += (float)currentlyRunningProcess.running_time;
+    stdWTA += pow((float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time - avgWTA, 2);
+    avgWaiting += getClk() - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time;
+
     currentlyRunningProcess.id = -1;
     currentlyRunningProcess.pid = -1;
+    // currentlyRunningProcess.start_time = -1;
 
     printf("\033[0m"); // Resets the text color to default
     if (algorthmNo == 2)
@@ -422,9 +436,9 @@ int main(int argc, char *argv[])
     signal(SIGINT, terminateScheduler);
     signal(SIGUSR2, processTermination);
     initClk();
-    // execl("./scheduler.out", "scheduler.out", algorthmNo, quantum, countProcesses, NULL);
-    FILE* logFile = fopen("Scheduler.logFile", "w");
-    FILE* perf = fopen("Scheduler.perf", "w");
+
+    logFile = fopen("Scheduler.log", "w");
+    perf = fopen("Scheduler.perf", "w");
 
     algorthmNo = atoi(argv[1]);
     int quantum = atoi(argv[2]);
@@ -433,25 +447,19 @@ int main(int argc, char *argv[])
     int previousTime = getClk();
     currentlyRunningProcess.pid = -1;
     currentlyRunningProcess.id = -1;
+    currentlyRunningProcess.start_time = -1;
     bool recievedProcessthisTimeStep = false;
     readyQueueC = createQueueC();
 
     key_t key = ftok("keyFile", msgqKey);
     msgq = msgget(key, IPC_CREAT | 0666);
-    
 
     printf("Scheduler initialized with algorithm number: %d, quantum: %d, and count of processes: %d\n", algorthmNo, quantum, countProcesses);
+    fprintf(logFile, "#At time x process y state arr w total z remain y wait k\n");
 
     // main while loop
     while (1)
     {
-        //check for terminated processes
-        if (terminationFlag == -1)
-        {
-            terminationFlag = 0;
-            
-        }
-
 
         // ----------------------------------------------------------------Recieve Process----------------------------------------------------------------
         // WaitingQueue will contain all arrived processes
@@ -480,6 +488,7 @@ int main(int argc, char *argv[])
                     usleep(5 * 1000); // usleep takes sleep time in microseconds
                     recievedProcess.pid = pid;
                     recievedProcess.running_time = 0;
+                    recievedProcess.start_time = -1;
                     recievedProcess.arrival_time = getClk();
 
                     enqueueQueue(&waitingQfront, &waitingQrear, recievedProcess);
@@ -506,10 +515,9 @@ int main(int argc, char *argv[])
                     recievedProcessthisTimeStep = true;
                     temp = dequeueQueue(&waitingQfront, &waitingQrear);
                     if (pq == NULL)
-                        pq = newNode(temp, temp.remainig_time);
+                        pq = newNode(temp, temp.priority);
                     else
-                        ppush(&pq, temp, temp.remainig_time);
-                    // printf("waiting queue iam here"); printQueue(pq);
+                        ppush(&pq, temp, temp.priority);
                 }
                 printQueue(pq);
 
@@ -520,20 +528,34 @@ int main(int argc, char *argv[])
                 {
                     if (!pisEmpty(&pq))
                     {
+
                         currentlyRunningProcess = ppeek(&pq);
 
                         printf("Currently running process: %d\n", currentlyRunningProcess.id);
+
+                        if (currentlyRunningProcess.start_time == -1)
+                        {
+                            currentlyRunningProcess.start_time = getClk() - 1;
+                            fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+                        }
+                        else
+                        {
+                            fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+                        }
 
                         kill(currentlyRunningProcess.pid, SIGCONT);
                         kill(currentlyRunningProcess.pid, decrementTime);
 
                         currentlyRunningProcess.remainig_time--;
+                        currentlyRunningProcess.running_time++;
                     }
                 }
                 else // process is running
                 {
                     kill(currentlyRunningProcess.pid, SIGCONT);
                     kill(currentlyRunningProcess.pid, decrementTime);
+                    currentlyRunningProcess.remainig_time--;
+                    currentlyRunningProcess.running_time++;
                 }
 
                 recievedProcessthisTimeStep = false;
@@ -542,6 +564,10 @@ int main(int argc, char *argv[])
                 if (remainingProcesses == 0 && pisEmpty(&pq) && pisEmpty(&pq))
                 {
                     kill(getppid(), SIGINT);
+                    fprintf(perf, "CPU utilization = %.2f %%\n", CPUUtilization / (getClk() - 1) * 100);
+                    fprintf(perf, "Avg WTA = %.2f\n", avgWTA / countProcesses);
+                    fprintf(perf, "Avg Waiting = %.2f\n", avgWaiting / countProcesses);
+                    fprintf(perf, "Std WTA = %.2f\n", sqrt(stdWTA / countProcesses));
                 }
             }
             //---------------------------------------------------------------Non-preemptive Highest Priority First HPF algorithm END--------------------------------------------
@@ -568,8 +594,17 @@ int main(int argc, char *argv[])
                 {
                     if (!pisEmpty(&pq))
                     {
-                        fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", getClk() - 1, ppeek(&pq).id, ppeek(&pq).arrival_time, ppeek(&pq).running_time, ppeek(&pq).remainig_time, getClk() - 1 - ppeek(&pq).arrival_time - ppeek(&pq).running_time);
+
                         currentlyRunningProcess = ppeek(&pq);
+                        if (currentlyRunningProcess.start_time == -1)
+                        {
+                            currentlyRunningProcess.start_time = getClk() - 1;
+                            fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+                        }
+                        else
+                        {
+                            fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+                        }
                         kill(currentlyRunningProcess.pid, SIGCONT);
                         kill(currentlyRunningProcess.pid, decrementTime);
                         ppop(&pq);
@@ -597,15 +632,6 @@ int main(int argc, char *argv[])
                                 pq = newNode(currentlyRunningProcess, currentlyRunningProcess.remainig_time);
                             else
                                 ppush(&pq, currentlyRunningProcess, currentlyRunningProcess.remainig_time);
-
-                            if (currentlyRunningProcess.arrival_time == getClk()-1)
-                            {
-                                fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
-                            }
-                            else
-                            {
-                                fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
-                            }
                         }
                         else
                         {
@@ -660,7 +686,16 @@ int main(int argc, char *argv[])
                         currentlyRunningProcess = dequeueC(&readyQueueC);
 
                         quantumCounter = 0;
-                        fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+                        if (currentlyRunningProcess.start_time == -1)
+                        {
+                            currentlyRunningProcess.start_time = getClk() - 1;
+                            fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+                        }
+                        else
+                        {
+                            fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+                        }
+
                         kill(currentlyRunningProcess.pid, SIGCONT);
                         kill(currentlyRunningProcess.pid, decrementTime);
                         currentlyRunningProcess.remainig_time--;
@@ -670,19 +705,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    // if (currentlyRunningProcess.remainig_time == 0)
-                    // {
-                    //     printf("twAT\n");
-                    //     fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
-                    //     kill(currentlyRunningProcess.pid, SIGSTOP);
-                    //     currentlyRunningProcess.id = -1;
-                    //     currentlyRunningProcess.pid = -1;
-                    //     if (!isQueueCEmpty(&readyQueueC))
-                    //     {
-                    //         currentlyRunningProcess = dequeueC(&readyQueueC);
-                    //         quantumCounter = 0;
-                    //     }
-                    // }
+
                     if (quantumCounter < quantum)
                     {
 
@@ -694,21 +717,25 @@ int main(int argc, char *argv[])
                     }
                     else if (quantumCounter == quantum)
                     {
-                        fprintf(logFile, "At time %d process %d stopped arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+                        if (!isQueueCEmpty(&readyQueueC))
+                            fprintf(logFile, "At time %d process %d stopped arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
                         kill(currentlyRunningProcess.pid, SIGSTOP);
                         if (currentlyRunningProcess.remainig_time > 0)
                             enqueueC(&readyQueueC, currentlyRunningProcess);
-                        currentlyRunningProcess.id = -1;
-                        currentlyRunningProcess.pid = -1;
+
+                        int testID = currentlyRunningProcess.id;
                         quantumCounter = 0;
                         currentlyRunningProcess = dequeueC(&readyQueueC);
-                        if (currentlyRunningProcess.arrival_time == getClk())
+
+                        if (currentlyRunningProcess.start_time == -1)
                         {
+                            currentlyRunningProcess.start_time = getClk() - 1;
                             fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
                         }
                         else
                         {
-                            fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
+                            if (testID != currentlyRunningProcess.id)
+                                fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", getClk() - 1, currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - 1 - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time);
                         }
                         kill(currentlyRunningProcess.pid, SIGCONT);
                         kill(currentlyRunningProcess.pid, decrementTime);
@@ -723,6 +750,10 @@ int main(int argc, char *argv[])
                 if (remainingProcesses == 0 && isQueueCEmpty(&readyQueueC) && currentlyRunningProcess.id == -1)
                 {
                     kill(getppid(), SIGINT);
+                    fprintf(perf, "CPU utilization = %.2f %%\n", CPUUtilization / (getClk() - 1) * 100);
+                    fprintf(perf, "Avg WTA = %.2f\n", avgWTA / countProcesses);
+                    fprintf(perf, "Avg Waiting = %.2f\n", avgWaiting / countProcesses);
+                    //fprintf(perf, "Std WTA = %.2f\n", sqrt(stdWTA / countProcesses));
                 }
             }
 

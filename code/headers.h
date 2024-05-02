@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <limits.h>
 #include <errno.h>
+#include <math.h>
 
 typedef short bool;
 #define true 1
@@ -28,6 +29,7 @@ struct process
     int running_time;
     int priority;
     int remainig_time;
+    int start_time;
     pid_t pid ;
     
 };
