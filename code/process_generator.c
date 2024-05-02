@@ -1,5 +1,6 @@
 #include "headers.h"
-//hi babes
+#include "data_structures.h"
+
 void clearResources(int);
 struct process *processes;
 int msgq;
