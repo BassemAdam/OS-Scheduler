@@ -87,7 +87,7 @@ void forClockScheduler(char *algorthmNo, char *quantum, char *countProcesses)
     }
 }
 // This function sends the process to the scheduler
-void send_to_scheduler(int msqid, struct process process)
+void sendToScheduler(int msqid, struct process process)
 {
     struct msgbuff message;
     message.mtype = 1;
@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
         int currentTime = getClk();
         if (processes[i].arrival_time == currentTime)
         {
-            send_to_scheduler(msgq, processes[i]);
+            sendToScheduler(msgq, processes[i]);
             printf("Sending process %d to the scheduler at time = %d\n", processes[i].id, getClk());
             i++;
         }
