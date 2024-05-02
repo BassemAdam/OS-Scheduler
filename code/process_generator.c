@@ -1,12 +1,11 @@
 #include "headers.h"
 #include "data_structures.h"
-
 void clearResources(int);
 struct process *processes;
 int msgq;
 pid_t clk_id, scheduler_id;
 // This function reads the processes from the file and stores them in the processes list
-int input_processes(struct process **processes)
+int inputProcesses(struct process **processes)
 {
     FILE *file = fopen("processes.txt", "r");
     if (file == NULL) // Check if the file exists
@@ -37,29 +36,30 @@ int input_processes(struct process **processes)
     fclose(file);
     return count;
 }
-
-void request_algorithm(int *chosen_algorithm, int *quantum_time)
+//this function asks the user to enter the chosen algorithm and its parameters
+void requestAlgorithm(int *chosenAlgorithm, int *quantumTime)
 {
     printf("Please enter the chosen scheduling algorithm and its parameters\n");
     printf("1-HPF  2-SRTN  3-RR\n"); // 1 for HPF, 2 for SRTN, 3 for RR
     while (true)                     // loop until valid input
     {
-        scanf("%d", chosen_algorithm);
-        if (*chosen_algorithm != 1 && *chosen_algorithm != 2 && *chosen_algorithm != 3)
+        scanf("%d", chosenAlgorithm);
+        if (*chosenAlgorithm != 1 && *chosenAlgorithm != 2 && *chosenAlgorithm != 3)
         {
             printf("Invalid input, please enter a valid number\n");
             continue;
         }
         break;
     }
-    *quantum_time=-1;
-    if (*chosen_algorithm == 3)
+    *quantumTime=-1;
+    if (*chosenAlgorithm == 3)
     {
         printf("Please enter the quantum time:\n");
-        scanf("%d", quantum_time);
+        scanf("%d", quantumTime);
     }
 }
-void create_clk_scheduler(char *algorthmNo, char *quantum, char *countProcesses)
+//this function creates the clock and scheduler processes
+void forClockScheduler(char *algorthmNo, char *quantum, char *countProcesses)
 {
     int clk_pid = fork();
     if (clk_pid == -1)
@@ -105,18 +105,18 @@ int main(int argc, char *argv[])
     // 1. Read the input files.
     key_t key = ftok("keyFile", msgqKey);
     msgq = msgget(key, IPC_CREAT | 0666);
-    int count_processes = input_processes(&processes);
-    printf("Processes count: %d\n", count_processes);
+    int countProcesses = inputProcesses(&processes);
+    printf("Processes count: %d\n", countProcesses);
     // 2. Ask the user for the chosen scheduling algorithm and its parameters, if there are any.
-    int chosen_algorithm, quantum_time;
-    request_algorithm(&chosen_algorithm, &quantum_time);
+    int chosenAlgorithm, quantumTime;
+    requestAlgorithm(&chosenAlgorithm, &quantumTime);
     // 3. Initiate and create the scheduler and clock processes.
-    char chosen_algorithm_str[10], quantum_time_str[10], count_processes_str[10];
+    char chosenAlgorithmString[10], quantumTimeString[10], countProcessesString[10];
 
-    sprintf(chosen_algorithm_str, "%d", chosen_algorithm);
-    sprintf(quantum_time_str, "%d", quantum_time);
-    sprintf(count_processes_str, "%d", count_processes);
-    create_clk_scheduler(chosen_algorithm_str, quantum_time_str, count_processes_str);
+    sprintf(chosenAlgorithmString, "%d", chosenAlgorithm);
+    sprintf(quantumTimeString, "%d", quantumTime);
+    sprintf(countProcessesString, "%d", countProcesses);
+    forClockScheduler(chosenAlgorithmString, quantumTimeString, countProcessesString);
     initClk();
     printf("Clock and Scheduler created\n");
     // 4. Use this function after creating the clock process to initialize clock
@@ -124,10 +124,10 @@ int main(int argc, char *argv[])
     // initClk();
     // TODO Generation Main Loop
     int i = 0;
-    while (i < count_processes)
+    while (i < countProcesses)
     {
-        int current_time = getClk();
-        if (processes[i].arrival_time == current_time)
+        int currentTime = getClk();
+        if (processes[i].arrival_time == currentTime)
         {
             send_to_scheduler(msgq, processes[i]);
             printf("Sending process %d to the scheduler at time = %d\n", processes[i].id, getClk());
