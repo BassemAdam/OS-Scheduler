@@ -86,7 +86,7 @@ struct process recieveProcess()
 void processTermination(int sig)
 {
 
-    fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d TA %d sumWTA %.2f\n", getClk(), currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time, getClk() - currentlyRunningProcess.arrival_time, (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time);
+    fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d TA %d WTA %.2f\n", getClk(), currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time, getClk() - currentlyRunningProcess.arrival_time, (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time);
     if (algorthmNo == 1)
     {
         deleteNode(&pq, currentlyRunningProcess.id);
@@ -110,7 +110,7 @@ void processTermination(int sig)
 void printPerformance()
 {
     fprintf(perf, "CPU utilization = %.2f %%\n", CPUUtilization / (getClk() - 1) * 100);
-    fprintf(perf, "Avg sumWTA = %.2f\n", sumWTA / countProcesses);
+    fprintf(perf, "Avg WTA = %.2f\n", sumWTA / countProcesses);
     fprintf(perf, "Avg Waiting = %.2f\n", avgWaiting / countProcesses);
     fprintf(perf, "Std WTA = %.2f\n", calculateSD(WTAArray, countProcesses));
 }
