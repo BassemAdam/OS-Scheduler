@@ -101,10 +101,16 @@ void processTermination(int sig)
 
     WTAArray[currentlyRunningProcess.id - 1] = (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time;
     avgWaiting += getClk() - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time;
+    
+    // Free the memory block of the terminated process
+    if (!freeMemoryBlockB(root, currentlyRunningProcess.id)) {
+        printf("Failed to free memory of process %d\n", currentlyRunningProcess.id);
+    }
 
     currentlyRunningProcess.id = -1;
     currentlyRunningProcess.pid = -1;
     currentlyRunningProcess.state = "finished";
+ 
 }
 
 void printPerformance()
@@ -126,10 +132,11 @@ void runProcess()
 void HPF();
 void SRTN();
 void RR(int quantum);
-
+struct MemoryBlock* root;
 int main(int argc, char *argv[])
 {
-
+    root = createMemoryBlock(0, 1024);
+    
     signal(SIGINT, terminateScheduler);
     signal(SIGUSR2, processTermination);
     initClk();
@@ -237,11 +244,24 @@ void HPF()
     {
 
         recievedProcessthisTimeStep = true;
-        temp = dequeueQueue(&waitingQfront, &waitingQrear);
-        if (pq == NULL)
-            pq = newNode(temp, temp.priority);
-        else
-            ppush(&pq, temp, temp.priority);
+         temp = ppeek(&waitingQfront);
+         struct MemoryBlock* block = occupyMemoryBlockB(root, temp.mem_size, temp.id);
+        if (block == NULL)
+        {
+            printf("Memory is full\n");
+            printf("Failed to allocate memory for process %d\n", temp.id);
+            continue;
+        }else{
+                //temp.memoryBlock = block;
+            temp = dequeueQueue(&waitingQfront, &waitingQrear);
+            // Allocate memory for the process
+        
+            if (pq == NULL)
+                pq = newNode(temp, temp.priority);
+            else
+                ppush(&pq, temp, temp.priority);
+        }
+     
     }
     printQueue(pq);
 

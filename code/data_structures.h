@@ -15,7 +15,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-
+#include <string.h>
 // Data Structures
 struct process
 {
@@ -25,8 +25,23 @@ struct process
     int priority;
     int remainig_time;
     int start_time;
+    int mem_size;
     char *state;
     pid_t pid;
+    struct MemoryBlock* memoryBlock;
+};
+
+struct MemoryBlock {
+    int start;
+    int end;
+    int size;
+    int process_id;
+    bool state;
+    bool allocated;
+    struct MemoryBlock* left;
+    struct MemoryBlock* right;
+    struct MemoryBlock* parent;
+    struct MemoryBlock* buddy;
 };
 
 struct msgbuff
@@ -103,6 +118,10 @@ struct process dequeueQueue(struct QueueNode **front, struct QueueNode **rear);
 void deleteNode(struct pnode **head, int id);
 
 void printQueue(struct pnode *pq);
-//------------------------------------UTILITY FUNCTIONS for HPF end------------------------------------
+//------------------------------------UTILITY FUNCTIONS FOR MEMORY OPERATIONS------------------------------------
+struct MemoryBlock* createBlock(int size, int start, int end, int process_id, bool state, bool allocated, struct MemoryBlock* left, struct MemoryBlock* right, struct MemoryBlock* parent);
+struct MemoryBlock* findBestFit(struct MemoryBlock* root, int size);
+struct MemoryBlock* occupyMemoryBlock(struct MemoryBlock* root, int size, int process_id);
+bool freeMemoryBlock(struct MemoryBlock* root, int process_id);
 
 #endif
