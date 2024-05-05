@@ -158,7 +158,7 @@ bool freeMemoryBlockB(struct MemoryBlockB *root, int process_id)
     }
     bool freedInLeft = freeMemoryBlockB(root->left, process_id);
     bool freedInRight = freeMemoryBlockB(root->right, process_id);
-
+    printMemoryTree(root, 0, "", false);
     if (root->left && root->right)
     {
         printf("HAHA");
@@ -172,6 +172,7 @@ bool freeMemoryBlockB(struct MemoryBlockB *root, int process_id)
             root->right = NULL;
         }
     }
+    printMemoryTree(root, 0, "", false);
     if (root->startAddress == 0 && root->size == 1024)
     {
         printf("first block\n");
@@ -179,83 +180,6 @@ bool freeMemoryBlockB(struct MemoryBlockB *root, int process_id)
     }
     return freedInLeft || freedInRight;
 }
-// struct StackNode {
-//     struct MemoryBlockB *data;
-//     struct StackNode *next;
-// };
-
-// struct StackNode* newStackNode(struct MemoryBlockB *data)
-// {
-//     struct StackNode *node = (struct StackNode*) malloc(sizeof(struct StackNode));
-//     node->data = data;
-//     node->next = NULL;
-//     return node;
-// }
-
-// void push(struct StackNode** root, struct MemoryBlockB *data)
-// {
-//     struct StackNode* node = newStackNode(data);
-//     node->next = *root;
-//     *root = node;
-// }
-
-// bool isEmpty(struct StackNode *root)
-// {
-//     return !root;
-// }
-
-// struct MemoryBlockB* pop(struct StackNode** root)
-// {
-//     if (isEmpty(*root))
-//         return NULL;
-//     struct StackNode* temp = *root;
-//     *root = (*root)->next;
-//     struct MemoryBlockB *popped = temp->data;
-//     free(temp);
-
-//     return popped;
-// }
-
-// bool freeMemoryBlockB(struct MemoryBlockB *root, int process_id)
-// {
-//     struct StackNode *stack = NULL;
-
-//     push(&stack, root);
-
-//     bool freed = false;
-
-//     while (!isEmpty(stack)) {
-//         struct MemoryBlockB *node = pop(&stack);
-
-//         if (node == NULL)
-//             continue;
-
-//         if (node->processId == process_id) {
-//             node->processId = -1;
-//             node->is_free = true;
-//             printf("\033[0;33mFreed block for process %d from %d to %d\n\033[0m", process_id, node->startAddress, node->startAddress + node->size - 1);
-//             freed = true;
-//             printf("im here\n");
-//         }
-//         printf("im here 1\n");
-//         if (node->left && node->right) {
-//             printf("im here 2\n");
-//             if (node->left->is_free && node->right->is_free) {
-//                 printf("im here 3\n");
-//                 printf("\033[0;33m joined two memory slots from %d to %d and from %d to %d\n\033[0m", node->left->startAddress, node->left->startAddress + node->left->size - 1, node->right->startAddress, node->right->startAddress + node->right->size - 1);
-//                 node->is_free = true;
-//                 free(node->left);
-//                 free(node->right);
-//                 node->left = NULL;
-//                 node->right = NULL;
-//             }
-//         }
-//         push(&stack, node->left);
-//         push(&stack, node->right);
-//     }
-
-//     return freed;
-// }
 struct process peekQueue(struct QueueNode **front)
 {
     // Check if queue is empty
