@@ -2,6 +2,129 @@
 #include "data_structures.h"
 
 #define decrementTime SIGUSR1
+//MEMORYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY
+struct MemoryBlockB {
+    int startAddress;
+    int size;
+    int processId; // -1 if the block is free
+    bool is_free; // true if the block is free, false otherwise
+    struct MemoryBlockB* parent;
+    struct MemoryBlockB* left;
+    struct MemoryBlockB* right;
+};
+
+struct MemoryBlockB* createMemoryBlock(int startAddress, int size) {
+    struct MemoryBlockB* block = (struct MemoryBlockB*) malloc(sizeof(struct MemoryBlockB));
+    block->startAddress = startAddress;
+    block->size = size;
+    block->processId = -1; // -1 indicates the block is free
+    block->is_free = true;
+    block->parent = NULL;
+    block->left = NULL;
+    block->right = NULL;
+    return block;
+}
+/* 
+ * This function traverses the binary tree of memory blocks to find the smallest block 
+ * that is large enough to accommodate the requested size and is currently free.
+ * It uses a depth-first search strategy, checking both the left and right child nodes 
+ * and returning the smallest suitable block found.
+ */
+struct MemoryBlockB* getSmallestSuitableBlock(struct MemoryBlockB* node, int size) {
+    // If the node has both left and right children
+    if(node->left && node->right) {
+        // Recursively search in the left and right subtrees
+        struct MemoryBlockB* leftBlock = getSmallestSuitableBlock(node->left, size);
+        struct MemoryBlockB* rightBlock = getSmallestSuitableBlock(node->right, size);
+        
+        // If no suitable block is found in either subtree, return NULL
+        if(leftBlock == NULL && rightBlock == NULL) {
+            return NULL;
+        }
+        // If no suitable block is found in the left subtree, return the block from the right subtree
+        if(leftBlock == NULL) {
+            return rightBlock;
+        }
+        // If no suitable block is found in the right subtree, return the block from the left subtree
+        if(rightBlock == NULL) {
+            return leftBlock;
+        }
+        // If suitable blocks are found in both subtrees, return the smallest one
+        if(leftBlock->size <= rightBlock->size) {
+            return leftBlock;
+        } else {
+            return rightBlock;
+        }
+    } else {
+        // If the node has no children (i.e., it's a leaf node), check if it's large enough and free
+        if(node->size >= size && node->processId == -1) {
+            return node;
+        } else {
+            return NULL;
+        }
+    }
+}
+
+struct MemoryBlockB* occupyMemoryBlockB(struct MemoryBlockB* root, struct process* process) {
+    if (root == NULL) {
+        return NULL;
+    }
+
+    int size = process->mem_size;
+    int process_id = process->id;
+
+    struct MemoryBlockB* temp = getSmallestSuitableBlock(root, size);
+    if(temp == NULL) {
+        return NULL;
+    }
+    while(temp->size/2 >= size) {
+        temp->left = createMemoryBlock(temp->startAddress, temp->size / 2);
+        temp->right = createMemoryBlock(temp->startAddress + temp->size / 2, temp->size / 2);
+        temp = temp->left;
+    }
+    temp->processId = process_id;
+    printf("\033[0;33mAt time %d allocated %d bytes for process %d from %d to %d\n\033[0m", getClk(), size, process_id, temp->startAddress, temp->startAddress + temp->size - 1);
+    process->memoryBlock = temp;
+    struct MemoryBlockB* parent = temp->parent;
+    while(parent != NULL) {
+        parent->is_free = false;
+        parent = parent->parent;
+    }
+    return temp;
+}
+
+bool freeMemoryBlockB(struct MemoryBlockB* root, int process_id) {
+    if(root == NULL) {
+        return false;
+    }
+    if(root->processId == process_id) {
+        root->processId = -1;
+        root->is_free = true;
+        printf("\033[0;33mFreed block for process %d from %d to %d\n\033[0m", process_id, root->startAddress, root->startAddress + root->size - 1);   
+        return true; 
+    }
+    bool freedInLeft = freeMemoryBlockB(root->left, process_id);
+    bool freedInRight = freeMemoryBlockB(root->right, process_id);
+    if(root->left && root->left->is_free && root->right && root->right->is_free) {
+        root->is_free = true;
+        root->left = NULL;
+        root->right = NULL;
+    }
+    return freedInLeft || freedInRight;
+}
+struct process peekQueue(struct QueueNode** front) {
+    // Check if queue is empty
+    if (isQueueEmpty(front)) {
+        struct process emptyProcess;
+        emptyProcess.id = -1;  // Indicate an empty process with id -1
+        return emptyProcess;
+    }
+
+    // Return the process at the front of the queue
+    return (*front)->data;
+}
+struct MemoryBlockB* root;
+//MEMOYRYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY ENDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
 
 float *WTAArray;
 
@@ -85,6 +208,13 @@ struct process recieveProcess()
 
 void processTermination(int sig)
 {
+       // Free the memory block of the terminated process
+    if (!freeMemoryBlockB(root, currentlyRunningProcess.id)) {
+        printf("Failed to free memory of process %d\n", currentlyRunningProcess.id);
+    } else {
+        printf("\033[0;33mAt time %d freed %d bytes from process %d from %d to %d\n\033[0m", getClk(), currentlyRunningProcess.mem_size, currentlyRunningProcess.id, currentlyRunningProcess.memoryBlock->startAddress, currentlyRunningProcess.memoryBlock->startAddress + currentlyRunningProcess.memoryBlock->size - 1);  
+          }
+
 
     fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d TA %d WTA %.2f\n", getClk(), currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time, getClk() - currentlyRunningProcess.arrival_time, (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time);
     if (algorthmNo == 1)
@@ -102,10 +232,7 @@ void processTermination(int sig)
     WTAArray[currentlyRunningProcess.id - 1] = (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time;
     avgWaiting += getClk() - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time;
     
-    // Free the memory block of the terminated process
-    if (!freeMemoryBlockB(root, currentlyRunningProcess.id)) {
-        printf("Failed to free memory of process %d\n", currentlyRunningProcess.id);
-    }
+ 
 
     currentlyRunningProcess.id = -1;
     currentlyRunningProcess.pid = -1;
@@ -132,7 +259,7 @@ void runProcess()
 void HPF();
 void SRTN();
 void RR(int quantum);
-struct MemoryBlock* root;
+
 int main(int argc, char *argv[])
 {
     root = createMemoryBlock(0, 1024);
@@ -244,8 +371,8 @@ void HPF()
     {
 
         recievedProcessthisTimeStep = true;
-         temp = ppeek(&waitingQfront);
-         struct MemoryBlock* block = occupyMemoryBlockB(root, temp.mem_size, temp.id);
+         temp = peekQueue(&waitingQfront);
+         struct MemoryBlockB* block = occupyMemoryBlockB(root, &temp);
         if (block == NULL)
         {
             printf("Memory is full\n");
