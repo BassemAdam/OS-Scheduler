@@ -13,7 +13,7 @@ struct MemoryBlockB
     struct MemoryBlockB *left;
     struct MemoryBlockB *right;
 };
-
+struct MemoryBlockB *root;
 struct MemoryBlockB *createMemoryBlock(int startAddress, int size)
 {
     struct MemoryBlockB *block = (struct MemoryBlockB *)malloc(sizeof(struct MemoryBlockB));
@@ -26,6 +26,7 @@ struct MemoryBlockB *createMemoryBlock(int startAddress, int size)
     block->right = NULL;
     return block;
 }
+
 /*
  * This function traverses the binary tree of memory blocks to find the smallest block
  * that is large enough to accommodate the requested size and is currently free.
@@ -106,9 +107,9 @@ struct MemoryBlockB *getSmallestSuitableBlock(struct MemoryBlockB *node, int siz
     }
 }
 
-struct MemoryBlockB *occupyMemoryBlockB(struct MemoryBlockB *root, struct process *process)
+struct MemoryBlockB *occupyMemoryBlockB(struct MemoryBlockB *node, struct process *process)
 {
-    if (root == NULL)
+    if (node == NULL)
     {
         return NULL;
     }
@@ -116,7 +117,7 @@ struct MemoryBlockB *occupyMemoryBlockB(struct MemoryBlockB *root, struct proces
     int size = process->mem_size;
     int process_id = process->id;
 
-    struct MemoryBlockB *temp = getSmallestSuitableBlock(root, size);
+    struct MemoryBlockB *temp = getSmallestSuitableBlock(node, size);
     if (temp == NULL)
     {
         return NULL;
@@ -143,41 +144,40 @@ struct MemoryBlockB *occupyMemoryBlockB(struct MemoryBlockB *root, struct proces
     return temp;
 }
 
-bool freeMemoryBlockB(struct MemoryBlockB *root, int process_id)
+bool freeMemoryBlockB(struct MemoryBlockB *node, int process_id)
 {
-    if (root == NULL)
+    if (node == NULL)
     {
         return false;
     }
-    if (root->processId == process_id)
+    if (node->processId == process_id)
     {
-        root->processId = -1;
-        root->is_free = true;
-        printf("\033[0;33mFreed block for process %d from %d to %d\n\033[0m", process_id, root->startAddress, root->startAddress + root->size - 1);
+        node->processId = -1;
+        node->is_free = true;
+        printf("\033[0;33mFreed block for process %d from %d to %d\n\033[0m", process_id, node->startAddress, node->startAddress + node->size - 1);
         return true;
     }
-    bool freedInLeft = freeMemoryBlockB(root->left, process_id);
-    bool freedInRight = freeMemoryBlockB(root->right, process_id);
-    printMemoryTree(root, 0, "", false);
-    if (root->left && root->right)
+    bool freedInLeft = freeMemoryBlockB(node->left, process_id);
+    bool freedInRight = freeMemoryBlockB(node->right, process_id);
+    if (node->left && node->right)
     {
-        printf("HAHA");
-        if (root->left->is_free && root->right->is_free)
+        printf("%d %d\n", node->left->size, node->right->size);
+        if (node->left->is_free && node->right->is_free)
         {
-            printf("\033[0;33m joined two memory slots from %d to %d and from %d to %d\n\033[0m", root->left->startAddress, root->left->startAddress + root->left->size - 1, root->right->startAddress, root->right->startAddress + root->right->size - 1);
-            root->is_free = true;
-            free(root->left);
-            free(root->right);
-            root->left = NULL;
-            root->right = NULL;
+            printf("\033[0;33m joined two memory slots from %d to %d and from %d to %d\n\033[0m", node->left->startAddress, node->left->startAddress + node->left->size - 1, node->right->startAddress, node->right->startAddress + node->right->size - 1);
+            node->is_free = true;
+            free(node->left);
+            free(node->right);
+            node->left = NULL;
+            node->right = NULL;
         }
     }
-    printMemoryTree(root, 0, "", false);
-    if (root->startAddress == 0 && root->size == 1024)
+    if (node->startAddress == 0 && node->size == 1024)
     {
+        printMemoryTree(root, 0, "", false);
         printf("first block\n");
-        printf("booleans = %d %d\n", freedInLeft, freedInRight);
     }
+    printf("%d\n", freedInLeft || freedInRight);
     return freedInLeft || freedInRight;
 }
 struct process peekQueue(struct QueueNode **front)
@@ -194,7 +194,6 @@ struct process peekQueue(struct QueueNode **front)
     return (*front)->data;
 }
 
-struct MemoryBlockB *root;
 // MEMOYRYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY ENDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
 
 float *WTAArray;
