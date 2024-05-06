@@ -16,6 +16,11 @@
 #include <errno.h>
 #include <math.h>
 #include <string.h>
+
+typedef short bool;
+#define true 1
+#define false 0
+
 // Data Structures
 struct process
 {
@@ -31,18 +36,16 @@ struct process
     struct MemoryBlockB* memoryBlock;
 };
 
-// struct MemoryBlock {
-//     int start;
-//     int end;
-//     int size;
-//     int process_id;
-//     bool state;
-//     bool allocated;
-//     struct MemoryBlock* left;
-//     struct MemoryBlock* right;
-//     struct MemoryBlock* parent;
-//     struct MemoryBlock* buddy;
-// };
+struct MemoryBlockB
+{
+    int startAddress;
+    int size;
+    int processId; // -1 if the block is free
+    bool is_free;  // true if the block is free, false otherwise
+    struct MemoryBlockB *parent;
+    struct MemoryBlockB *left;
+    struct MemoryBlockB *right;
+};
 
 struct msgbuff
 {
@@ -119,9 +122,10 @@ void deleteNode(struct pnode **head, int id);
 
 void printQueue(struct pnode *pq);
 //------------------------------------UTILITY FUNCTIONS FOR MEMORY OPERATIONS------------------------------------
-// struct MemoryBlock* createBlock(int size, int start, int end, int process_id, bool state, bool allocated, struct MemoryBlock* left, struct MemoryBlock* right, struct MemoryBlock* parent);
-// struct MemoryBlock* findBestFit(struct MemoryBlock* root, int size);
-// struct MemoryBlock* occupyMemoryBlock(struct MemoryBlock* root, int size, int process_id);
-// bool freeMemoryBlock(struct MemoryBlock* root, int process_id);
-
+struct MemoryBlockB *createMemoryBlock(int startAddress, int size);
+void printMemoryTree(struct MemoryBlockB *root, int level, char *prefix, bool isLeft);
+struct MemoryBlockB *getSmallestSuitableBlock(struct MemoryBlockB *node, int size);
+struct MemoryBlockB *occupyMemoryBlockB(struct MemoryBlockB *node, struct process *process);
+bool freeMemoryBlockB(struct MemoryBlockB *node, int process_id);
+struct process peekQueue(struct QueueNode **front);
 #endif
