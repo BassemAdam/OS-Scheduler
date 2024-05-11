@@ -29,9 +29,9 @@ int inputProcesses(struct process **processes)
     int i = 0;
     for (int i = 0; i < count; i++)
     {
-        fscanf(file, "%d %d %d %d", &(*processes)[i].id, &(*processes)[i].arrival_time, &(*processes)[i].running_time, &(*processes)[i].priority);
+        fscanf(file, "%d %d %d %d %d", &(*processes)[i].id, &(*processes)[i].arrival_time, &(*processes)[i].running_time, &(*processes)[i].priority, &(*processes)[i].mem_size);
         (*processes)[i].remainig_time = (*processes)[i].running_time;
-        printf("%d %d %d %d\n", (*processes)[i].id, (*processes)[i].arrival_time, (*processes)[i].running_time, (*processes)[i].priority);
+        printf("%d %d %d %d %d\n", (*processes)[i].id, (*processes)[i].arrival_time, (*processes)[i].running_time, (*processes)[i].priority, (*processes)[i].mem_size);
     }
     fclose(file);
     return count;
@@ -59,7 +59,7 @@ void requestAlgorithm(int *chosenAlgorithm, int *quantumTime)
     }
 }
 //this function creates the clock and scheduler processes
-void forClockScheduler(char *algorthmNo, char *quantum, char *countProcesses)
+void forkClockScheduler(char *algorthmNo, char *quantum, char *countProcesses)
 {
     int clk_pid = fork();
     if (clk_pid == -1)
@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
     sprintf(chosenAlgorithmString, "%d", chosenAlgorithm);
     sprintf(quantumTimeString, "%d", quantumTime);
     sprintf(countProcessesString, "%d", countProcesses);
-    forClockScheduler(chosenAlgorithmString, quantumTimeString, countProcessesString);
+    forkClockScheduler(chosenAlgorithmString, quantumTimeString, countProcessesString);
     initClk();
     printf("Clock and Scheduler created\n");
     // 4. Use this function after creating the clock process to initialize clock

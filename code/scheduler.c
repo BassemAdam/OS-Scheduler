@@ -2,6 +2,10 @@
 #include "data_structures.h"
 
 #define decrementTime SIGUSR1
+// MEMORYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY
+struct MemoryBlockB *root;
+
+// MEMOYRYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY ENDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
 
 float *WTAArray;
 
@@ -29,6 +33,8 @@ struct process currentlyRunningProcess;
 struct QueueNode *waitingQfront = NULL;
 struct QueueNode *waitingQrear = NULL;
 struct pnode *currentCircularNode = NULL;
+struct QueueNode *noMemoryQfront = NULL;
+struct QueueNode *noMemoryQrear = NULL;
 
 pNode *pq = NULL;
 pNode *ReadyQueueHPF = NULL;
@@ -40,7 +46,7 @@ struct QueueC *readyQueueC = NULL;
 
 FILE *logFile;
 FILE *perf;
-
+FILE *memoryLog;
 float avgTA = 0;
 float sumWTA = 0;
 float CPUUtilization = 0;
@@ -53,6 +59,8 @@ bool recievedProcessthisTimeStep = false;
 // SIGINT handler
 void terminateScheduler(int signum)
 {
+
+    free(WTAArray);
     destroyClk(false);
     msgctl(msgq, IPC_RMID, NULL);
     // signal to the process_genearator that the scheduler is done
@@ -85,6 +93,10 @@ struct process recieveProcess()
 
 void processTermination(int sig)
 {
+
+    // Free the memory block of the terminated process
+    fprintf(memoryLog, "At time %d freed %d bytes from process %d from %d to %d\n", getClk(), currentlyRunningProcess.mem_size, currentlyRunningProcess.id, currentlyRunningProcess.memoryBlock->startAddress, currentlyRunningProcess.memoryBlock->startAddress + currentlyRunningProcess.memoryBlock->size - 1);
+    freeMemoryBlockB(root, currentlyRunningProcess.id);
 
     fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d TA %d WTA %.2f\n", getClk(), currentlyRunningProcess.id, currentlyRunningProcess.arrival_time, currentlyRunningProcess.running_time, currentlyRunningProcess.remainig_time, getClk() - currentlyRunningProcess.arrival_time - currentlyRunningProcess.running_time, getClk() - currentlyRunningProcess.arrival_time, (float)(getClk() - currentlyRunningProcess.arrival_time) / currentlyRunningProcess.running_time);
     if (algorthmNo == 1)
@@ -129,12 +141,14 @@ void RR(int quantum);
 
 int main(int argc, char *argv[])
 {
+    root = createMemoryBlock(0, 1024);
 
     signal(SIGINT, terminateScheduler);
     signal(SIGUSR2, processTermination);
     initClk();
 
     logFile = fopen("Scheduler.log", "w");
+    memoryLog = fopen("Memory.log", "w");
     perf = fopen("Scheduler.perf", "w");
 
     algorthmNo = atoi(argv[1]);
@@ -155,10 +169,53 @@ int main(int argc, char *argv[])
 
     printf("Scheduler initialized with algorithm number: %d, quantum: %d, and count of processes: %d\n", algorthmNo, quantum, countProcesses);
     fprintf(logFile, "#At time x process y state arr w total z remain y wait k\n");
+    fprintf(memoryLog, "#At time x allocated y bytes for process z from i to j\n");
 
     // main while loop
     while (1)
     {
+        struct QueueNode *tempQfront1 = NULL;
+        struct QueueNode *tempQrear1 = NULL;
+        //----------------------------------------------------------------check for waiting for mem processes----------------------------------
+        while (!isQueueEmpty(&noMemoryQfront))
+        {
+            struct process peek = peekQueue(&noMemoryQfront);
+            struct MemoryBlockB *temp = occupyMemoryBlockB(root, &peek);
+            if (temp == NULL)
+            {
+                enqueueQueue(&tempQfront1, &tempQrear1, dequeueQueue(&noMemoryQfront, &noMemoryQrear));
+                continue;
+            }
+            else
+            {
+                
+                struct process tempProcess = dequeueQueue(&noMemoryQfront, &noMemoryQrear);
+                
+               printf("\033[0;33mAt time %d allocated %d bytes for process %d from %d to %d\n\033[0m", getClk() , tempProcess.mem_size, tempProcess.id, temp->startAddress, temp->startAddress + temp->size - 1);
+               fprintf(memoryLog, "At time %d allocated %d bytes for process %d from %d to %d\n", getClk() , tempProcess.mem_size, tempProcess.id, temp->startAddress, temp->startAddress + temp->size - 1);
+                tempProcess.memoryBlock = temp;
+
+                pid_t pid = fork();
+
+                if (pid == 0)
+                {
+                    char str[10];
+                    sprintf(str, "%d", tempProcess.remainig_time);
+                    execl("./process.out", "process.out", str, NULL);
+                }
+                else
+                {
+                    usleep(5 * 1000); // Literally breaks the code if removed
+                    tempProcess.pid = pid;
+
+                    enqueueQueue(&waitingQfront, &waitingQrear, tempProcess);
+                }
+                kill(tempProcess.pid, SIGSTOP);
+            }
+        }
+
+        noMemoryQfront = tempQfront1;
+        noMemoryQrear = tempQrear1;
 
         // ----------------------------------------------------------------Recieve Process----------------------------------------------------------------
         // WaitingQueue will contain all arrived processes
@@ -172,35 +229,51 @@ int main(int argc, char *argv[])
             // if  recieved a process
             if (recievedProcess.id != -1)
             {
-                // fork processes
-                pid_t pid = fork();
-
-                if (pid == 0)
+                recievedProcess.arrival_time = getClk();
+                recievedProcess.running_time = 0;
+                recievedProcess.start_time = -1;
+                recievedProcess.state = "waiting";
+                // check if can allocate memory or not
+                struct MemoryBlockB *temp = occupyMemoryBlockB(root, &recievedProcess);
+                if (temp == NULL)
                 {
-                    char str[10];
-                    sprintf(str, "%d", recievedProcess.remainig_time);
-                    execl("./process.out", "process.out", str, NULL);
+                    printf("Memory is full\n");
+                    printf("Failed to allocate memory for process %d\n", recievedProcess.id);
+                    enqueueQueue(&noMemoryQfront, &noMemoryQrear, recievedProcess);
                 }
                 else
                 {
-                    // sleep(1);
-                    usleep(5 * 1000); // usleep takes sleep time in microseconds
-                    recievedProcess.pid = pid;
-                    recievedProcess.running_time = 0;
-                    recievedProcess.start_time = -1;
-                    recievedProcess.state = "waiting";
-                    recievedProcess.arrival_time = getClk();
+                    printf("\033[0;33mAt time %d allocated %d bytes for process %d from %d to %d\n\033[0m", getClk() , recievedProcess.mem_size, recievedProcess.id, temp->startAddress, temp->startAddress + temp->size - 1);
+                    fprintf(memoryLog, "At time %d allocated %d bytes for process %d from %d to %d\n", getClk() , recievedProcess.mem_size, recievedProcess.id, temp->startAddress, temp->startAddress + temp->size - 1);
+                    recievedProcess.memoryBlock = temp;
+                    // fork processes
+                    pid_t pid = fork();
 
-                    enqueueQueue(&waitingQfront, &waitingQrear, recievedProcess);
+                    if (pid == 0)
+                    {
+                        char str[10];
+                        sprintf(str, "%d", recievedProcess.remainig_time);
+                        execl("./process.out", "process.out", str, NULL);
+                    }
+                    else
+                    {
+                        // sleep(1);
+                        usleep(5 * 1000); // usleep takes sleep time in microseconds
+                        recievedProcess.pid = pid;
+
+                        enqueueQueue(&waitingQfront, &waitingQrear, recievedProcess);
+                    }
+                    kill(recievedProcess.pid, SIGSTOP);
                 }
-                kill(recievedProcess.pid, SIGSTOP);
             }
         }
 
         int currentTime = getClk();
         // every time the clock ticks
+
         if (currentTime != previousTime)
         {
+
             printf("==============================Scheduler: current time = %d==============================\n", currentTime);
 
             switch (algorthmNo)
@@ -230,19 +303,21 @@ int main(int argc, char *argv[])
 
 void HPF()
 {
-    printf("Currently running process: %d\n", currentlyRunningProcess.id);
-    // take from queue to priority Q
-    struct process temp;
+    
+
     while (!isQueueEmpty(&waitingQfront))
     {
-
+        struct process temp = dequeueQueue(&waitingQfront, &waitingQrear);
         recievedProcessthisTimeStep = true;
-        temp = dequeueQueue(&waitingQfront, &waitingQrear);
-        if (pq == NULL)
-            pq = newNode(temp, temp.priority);
-        else
-            ppush(&pq, temp, temp.priority);
+        
+            if (pq == NULL)
+                pq = newNode(temp, temp.priority);
+            else
+                ppush(&pq, temp, temp.priority);
+        
     }
+
+
     printQueue(pq);
 
     // i want here to get the process that arrived first and then add it to ready queue
@@ -288,18 +363,22 @@ void HPF()
 
 void SRTN()
 {
-    // take from queue to priority Q
-    struct process temp;
+    
+
     while (!isQueueEmpty(&waitingQfront))
     {
-
         recievedProcessthisTimeStep = true;
-        temp = dequeueQueue(&waitingQfront, &waitingQrear);
-        if (pq == NULL)
-            pq = newNode(temp, temp.remainig_time);
-        else
-            ppush(&pq, temp, temp.remainig_time);
+        struct process temp = dequeueQueue(&waitingQfront, &waitingQrear);  
+        
+            if (pq == NULL)
+                pq = newNode(temp, temp.remainig_time);
+            else
+                ppush(&pq, temp, temp.remainig_time);
+        
     }
+
+    
+
     printQueue(pq);
 
     // if no process is running
@@ -390,16 +469,20 @@ void SRTN()
 
 void RR(int quantum)
 {
-    struct process temp;
-    while (!isQueueEmpty(&waitingQfront)) // arrival queue is not empty, receive and enqueue inside circular queue
+
+   
+
+    while (!isQueueEmpty(&waitingQfront))
     {
         recievedProcessthisTimeStep = true;
-
-        temp = dequeueQueue(&waitingQfront, &waitingQrear);
-
+        struct process temp = dequeueQueue(&waitingQfront, &waitingQrear); 
         enqueueC(&readyQueueC, temp);
+        
     }
-    
+
+
+   
+
     if (currentlyRunningProcess.id == -1) // if there is no running process, dequeue and run it
     {
         if (!isQueueCEmpty(&readyQueueC))

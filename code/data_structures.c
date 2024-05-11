@@ -1,6 +1,5 @@
 #include "data_structures.h"
 
-
 // Priority Queue
 pNode *newNode(struct process d, int p)
 {
@@ -293,4 +292,177 @@ void printQueue(struct pnode *pq)
         free(toFree);
     }
     printf("\n");
+}
+//------------------------------UTILITY FUNCTIONS for MEMORY--------------------------------
+
+struct MemoryBlockB *createMemoryBlock(int startAddress, int size)
+{
+    struct MemoryBlockB *block = (struct MemoryBlockB *)malloc(sizeof(struct MemoryBlockB));
+    block->startAddress = startAddress;
+    block->size = size;
+    block->processId = -1; // -1 indicates the block is free
+    block->is_free = true;
+    block->parent = NULL;
+    block->left = NULL;
+    block->right = NULL;
+    return block;
+}
+
+/*
+ * This function traverses the binary tree of memory blocks to find the smallest block
+ * that is large enough to accommodate the requested size and is currently free.
+ * It uses a depth-first search strategy, checking both the left and right child nodes
+ * and returning the smallest suitable block found.
+ */
+void printMemoryTree(struct MemoryBlockB *root, int level, char *prefix, bool isLeft)
+{
+    if (root == NULL)
+    {
+        return;
+    }
+
+    // Print the current node
+    printf("%s", prefix);
+    printf("%s [Block size: %d, process id: %d, is_free: %d]\n", isLeft ? "├──" : "└──", root->size, root->processId, root->is_free);
+
+    // Prepare the prefixes for child nodes
+    int prefixLength = strlen(prefix);
+    char *childPrefix = malloc((prefixLength + 5) * sizeof(char));
+    strcpy(childPrefix, prefix);
+    strcat(childPrefix, isLeft ? "│   " : "    "); // Adds two spaces for indentation
+
+    // Recursive call for the left child
+    printMemoryTree(root->left, level + 1, childPrefix, true);
+
+    // Recursive call for the right child
+    printMemoryTree(root->right, level + 1, childPrefix, false);
+
+    // Free dynamically allocated memory
+    free(childPrefix);
+}
+struct MemoryBlockB *getSmallestSuitableBlock(struct MemoryBlockB *node, int size)
+{
+    // If the node has both left and right children
+    if (node->left && node->right)
+    {
+        // Recursively search in the left and right subtrees
+        struct MemoryBlockB *leftBlock = getSmallestSuitableBlock(node->left, size);
+        struct MemoryBlockB *rightBlock = getSmallestSuitableBlock(node->right, size);
+
+        // If no suitable block is found in either subtree, return NULL
+        if (leftBlock == NULL && rightBlock == NULL)
+        {
+            return NULL;
+        }
+        // If no suitable block is found in the left subtree, return the block from the right subtree
+        if (leftBlock == NULL)
+        {
+            return rightBlock;
+        }
+        // If no suitable block is found in the right subtree, return the block from the left subtree
+        if (rightBlock == NULL)
+        {
+            return leftBlock;
+        }
+        // If suitable blocks are found in both subtrees, return the smallest one
+        if (leftBlock->size <= rightBlock->size)
+        {
+            return leftBlock;
+        }
+        else
+        {
+            return rightBlock;
+        }
+    }
+    else
+    {
+        // If the node has no children (i.e., it's a leaf node), check if it's large enough and free
+        if (node->size >= size && node->processId == -1)
+        {
+            return node;
+        }
+        else
+        {
+            return NULL;
+        }
+    }
+}
+
+struct MemoryBlockB *occupyMemoryBlockB(struct MemoryBlockB *node, struct process *process)
+{
+    if (node == NULL)
+    {
+        return NULL;
+    }
+
+    int size = process->mem_size;
+    int process_id = process->id;
+
+    struct MemoryBlockB *temp = getSmallestSuitableBlock(node, size);
+    if (temp == NULL)
+    {
+        return NULL;
+    }
+    while (temp->size / 2 >= size)
+    {
+        temp->left = createMemoryBlock(temp->startAddress, temp->size / 2);
+        temp->left->parent = temp;
+        temp->right = createMemoryBlock(temp->startAddress + temp->size / 2, temp->size / 2);
+        temp->right->parent = temp;
+        temp = temp->left;
+    }
+    temp->processId = process_id;
+    // printf("\033[0;33mAt time %d allocated %d bytes for process %d from %d to %d\n\033[0m", getClk(), size, process_id, temp->startAddress, temp->startAddress + temp->size - 1);
+    process->memoryBlock = temp;
+    temp->is_free = false;
+    struct MemoryBlockB *parent = temp->parent;
+    while (parent != NULL)
+    {
+        parent->is_free = false;
+        parent = parent->parent;
+    }
+    return temp;
+}
+
+bool freeMemoryBlockB(struct MemoryBlockB *node, int process_id)
+{
+    if (node == NULL)
+    {
+        return false;
+    }
+    if (node->processId == process_id)
+    {
+        node->processId = -1;
+        node->is_free = true;
+        printf("\033[0;33mFreed block for process %d from %d to %d\n\033[0m", process_id, node->startAddress, node->startAddress + node->size - 1);
+        return true;
+    }
+    bool freedInLeft = freeMemoryBlockB(node->left, process_id);
+    bool freedInRight = freeMemoryBlockB(node->right, process_id);
+    if (node->left && node->right)
+    {
+        if (node->left->is_free && node->right->is_free)
+        {
+            // printf("\033[0;33m joined two memory slots from %d to %d and from %d to %d\n\033[0m", node->left->startAddress, node->left->startAddress + node->left->size - 1, node->right->startAddress, node->right->startAddress + node->right->size - 1);
+            node->is_free = true;
+            free(node->left);
+            free(node->right);
+            node->left = NULL;
+            node->right = NULL;
+        }
+    }
+    return freedInLeft || freedInRight;
+}
+struct process peekQueue(struct QueueNode **front)
+{
+    // Check if queue is empty
+    if (isQueueEmpty(front))
+    {
+        struct process emptyProcess;
+        emptyProcess.id = -1; // Indicate an empty process with id -1
+        return emptyProcess;
+    }
+
+    // Return the process at the front of the queue
+    return (*front)->data;
 }

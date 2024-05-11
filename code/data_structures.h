@@ -15,6 +15,11 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
+#include <string.h>
+
+typedef short bool;
+#define true 1
+#define false 0
 
 // Data Structures
 struct process
@@ -25,8 +30,21 @@ struct process
     int priority;
     int remainig_time;
     int start_time;
+    int mem_size;
     char *state;
     pid_t pid;
+    struct MemoryBlockB* memoryBlock;
+};
+
+struct MemoryBlockB
+{
+    int startAddress;
+    int size;
+    int processId; // -1 if the block is free
+    bool is_free;  // true if the block is free, false otherwise
+    struct MemoryBlockB *parent;
+    struct MemoryBlockB *left;
+    struct MemoryBlockB *right;
 };
 
 struct msgbuff
@@ -103,6 +121,11 @@ struct process dequeueQueue(struct QueueNode **front, struct QueueNode **rear);
 void deleteNode(struct pnode **head, int id);
 
 void printQueue(struct pnode *pq);
-//------------------------------------UTILITY FUNCTIONS for HPF end------------------------------------
-
+//------------------------------------UTILITY FUNCTIONS FOR MEMORY OPERATIONS------------------------------------
+struct MemoryBlockB *createMemoryBlock(int startAddress, int size);
+void printMemoryTree(struct MemoryBlockB *root, int level, char *prefix, bool isLeft);
+struct MemoryBlockB *getSmallestSuitableBlock(struct MemoryBlockB *node, int size);
+struct MemoryBlockB *occupyMemoryBlockB(struct MemoryBlockB *node, struct process *process);
+bool freeMemoryBlockB(struct MemoryBlockB *node, int process_id);
+struct process peekQueue(struct QueueNode **front);
 #endif
